@@ -16,6 +16,9 @@ METHOD_AXES = {
 
 def _kwargs() -> dict:
     kw = {"model": settings.llm_model, "timeout": settings.llm_timeout}
+    fallbacks = [m.strip() for m in settings.llm_fallbacks.split(",") if m.strip()]
+    if fallbacks:
+        kw["fallbacks"] = fallbacks
     if settings.llm_api_key:
         kw["api_key"] = settings.llm_api_key
     if settings.llm_api_base:
