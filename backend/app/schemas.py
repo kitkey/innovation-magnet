@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Difficulty = Literal["easy", "medium", "hard"]
 Tone = Literal["neutral", "friendly", "strict", "skeptical"]
@@ -22,30 +22,43 @@ MoveLabel = Literal[
     "pressure",
     "personal_attack",
     "vague",
+    "accept",
+    "manipulation",
 ]
 Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "breakdown", "turn_limit", "user_finished"]
 
 
 class TargetZone(BaseModel):
-    unit: str = Field(description="единица торга: дни, проценты, рубли, число задач")
+    unit: str = Field(min_length=1, description="единица торга: дни, проценты, рубли, число задач")
     user_start: float
     zone_min: float
     zone_max: float
     opponent_start: float
 
+    @model_validator(mode="after")
+    def _consistent(self):
+        if self.zone_min > self.zone_max:
+            raise ValueError("Начало целевой зоны больше её конца")
+        if self.user_start == self.opponent_start:
+            raise ValueError("Стартовые позиции сторон совпадают, торговаться не о чем")
+        low, high = sorted((self.user_start, self.opponent_start))
+        if not low <= self.zone_min <= self.zone_max <= high:
+            raise ValueError("Целевая зона должна лежать между стартовыми позициями сторон")
+        return self
+
 
 class ScenarioCard(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     domain: str
     topic: str
     difficulty: Difficulty = "medium"
     tone: Tone = "neutral"
     method: Method = "free"
     style: Style = "hard"
-    user_role: str
-    user_goal: str
-    opponent_role: str
-    opponent_goal: str
+    user_role: str = Field(min_length=1)
+    user_goal: str = Field(min_length=1)
+    opponent_role: str = Field(min_length=1)
+    opponent_goal: str = Field(min_length=1)
     opponent_hidden_interests: list[str]
     opponent_batna: str
     user_batna: str
@@ -98,8 +111,13 @@ class KeyMoment(BaseModel):
 
 class JudgeReport(BaseModel):
     axes: dict[str, int] = Field(description="ось метода -> оценка 0..100")
-    key_moments: list[KeyMoment] = Field(max_length=3)
+    key_moments: list[KeyMoment] = Field(min_length=1, max_length=3)
     next_scenario_hint: str
+
+    @field_validator("axes")
+    @classmethod
+    def _clamp(cls, v: dict[str, int]) -> dict[str, int]:
+        return {k: max(0, min(100, int(x))) for k, x in v.items()}
 
 
 class SessionResult(BaseModel):
@@ -113,3 +131,8 @@ class SessionResult(BaseModel):
     details_covered: list[str]
     details_missed: list[str]
     judge: JudgeReport | None
+    judge_source: Literal["llm", "rules"] | None = None
+
+
+class RewindIn(BaseModel):
+    turn: int = Field(ge=0)

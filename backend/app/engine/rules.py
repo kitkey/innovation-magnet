@@ -20,6 +20,7 @@ LABEL_EFFECTS = {
     "pressure": {"trust": -2, "irritation": 2},
     "personal_attack": {"trust": -3, "irritation": 3},
     "vague": {"irritation": 1},
+    "manipulation": {"trust": -1, "irritation": 2},
 }
 
 STYLE_MULTIPLIERS = {
@@ -38,6 +39,12 @@ DIFFICULTY = {
 
 CONCESSION_STEPS = 4
 
+METHOD_AXES = {
+    "spin": ["ситуационные вопросы", "проблемные вопросы", "извлекающие вопросы", "направляющие вопросы"],
+    "harvard": ["люди отдельно от проблемы", "интересы, а не позиции", "варианты взаимной выгоды", "объективные критерии"],
+    "free": ["выяснение интересов", "аргументация", "конкретные предложения", "контроль эмоций"],
+}
+
 
 def initial_state(card: ScenarioCard) -> OpponentState:
     return OpponentState(position=card.target_zone.opponent_start)
@@ -46,6 +53,22 @@ def initial_state(card: ScenarioCard) -> OpponentState:
 def _direction(card: ScenarioCard) -> int:
     z = card.target_zone
     return 1 if z.user_start > z.opponent_start else -1
+
+
+def plausible_range(card: ScenarioCard) -> tuple[float, float]:
+    """Какие значения вообще можно считать предложением в единицах торга: от половины меньшего края до полутора большего."""
+    z = card.target_zone
+    edges = [abs(v) for v in (z.user_start, z.zone_min, z.zone_max, z.opponent_start)]
+    return 0.5 * min(edges), 1.5 * max(edges)
+
+
+def is_plausible(card: ScenarioCard, value: float) -> bool:
+    lo, hi = plausible_range(card)
+    return lo <= value <= hi
+
+
+def better_for_user(card: ScenarioCard, value: float, position: float) -> bool:
+    return _direction(card) * (value - position) > 1e-9
 
 
 def opponent_limit(card: ScenarioCard) -> float:
@@ -81,10 +104,13 @@ def decide_outcome(card: ScenarioCard, state: OpponentState, move: MoveAnalysis,
     diff = DIFFICULTY[card.difficulty]
     if state.irritation >= diff["breakdown_irritation"] or state.trust <= -6:
         return "breakdown", None
-    if move.proposed_value is not None and "concrete_offer" in move.labels:
-        if _direction(card) * (move.proposed_value - state.position) <= 1e-9:
-            z = card.target_zone
-            value = move.proposed_value
+    z = card.target_zone
+    value = move.proposed_value if move.proposed_value is not None and is_plausible(card, move.proposed_value) else None
+    if "manipulation" not in move.labels:
+        if value is not None and ("concrete_offer" in move.labels or "accept" in move.labels) and not better_for_user(card, value, state.position):
+            return ("agreement_in_zone" if z.zone_min <= value <= z.zone_max else "agreement_out_of_zone"), value
+        if "accept" in move.labels and value is None:
+            value = state.position
             return ("agreement_in_zone" if z.zone_min <= value <= z.zone_max else "agreement_out_of_zone"), value
     if turn >= card.max_turns:
         return "turn_limit", None
