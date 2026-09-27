@@ -71,6 +71,7 @@ class ScenarioCard(BaseModel):
 
 class Scenario(ScenarioCard):
     id: str
+    org_id: str | None = None
 
 
 class ScenarioBrief(BaseModel):

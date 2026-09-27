@@ -43,9 +43,9 @@ def _opening(card: ScenarioCard, state: OpponentState) -> str:
     return f"{card.opponent_role}. Слушаю вас. Моё предложение: {state.position:g} {card.target_zone.unit}."
 
 
-def start(db, scenario_id: str, card: ScenarioCard) -> SessionRow:
+def start(db, scenario_id: str, card: ScenarioCard, user_id: str | None = None) -> SessionRow:
     state = rules.initial_state(card)
-    row = SessionRow(id=uuid4().hex, scenario_id=scenario_id, card=card.model_dump(), state=state.model_dump())
+    row = SessionRow(id=uuid4().hex, scenario_id=scenario_id, card=card.model_dump(), state=state.model_dump(), user_id=user_id)
     row.turns.append(TurnRow(role="opponent", text=_opening(card, state)))
     db.add(row)
     db.commit()
@@ -126,7 +126,7 @@ def rewind(db, row: SessionRow, keep: int) -> SessionRow:
     if keep == len(pairs) and row.outcome not in (None, "user_finished"):
         raise ValueError("Этот ход завершил переговоры, переиграйте с более раннего")
     state = rules.initial_state(card)
-    new = SessionRow(id=uuid4().hex, scenario_id=row.scenario_id, card=row.card, state=state.model_dump(), turn=keep)
+    new = SessionRow(id=uuid4().hex, scenario_id=row.scenario_id, card=row.card, state=state.model_dump(), turn=keep, user_id=row.user_id)
     new.turns.append(TurnRow(role="opponent", text=row.turns[0].text))
     for user, opp in pairs[:keep]:
         state, _ = rules.apply_move(card, state, MoveAnalysis(**user.analysis))
