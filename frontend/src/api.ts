@@ -20,6 +20,8 @@ export type ScenarioCard = {
   context: string;
   max_turns: number;
   locked_by_org: boolean;
+  voice: "female" | "male";
+  avatar_url: string | null;
 };
 
 export type Scenario = ScenarioCard & { id: string; org_id: string | null };
@@ -40,7 +42,14 @@ export type TurnOut = {
   outcome: string | null;
   analysis: { labels: string[]; mentioned_details: string[]; proposed_value: number | null };
   state: { trust: number; readiness: number; irritation: number; position: number };
+  mood: Mood;
 };
+
+export type Mood = "neutral" | "happy" | "angry" | "sad" | "disgust";
+export type VoiceTurnOut = TurnOut & { recognized: string; audio_url: string | null };
+export type VoiceStatus = { stt: boolean; tts: boolean; provider: string | null; ffmpeg: boolean; max_seconds: number; avatar_max_mb: number };
+export type Speech = { audio: string | null; mime: string; words: string[]; wtimes: number[]; wdurations: number[]; mood: Mood; voice?: string; role?: string };
+export type AvatarUpload = { url: string; size: number; morph_targets: number; visemes: number; warnings: string[] };
 
 export type SessionResult = {
   session_id: string;
@@ -56,6 +65,8 @@ export type SessionResult = {
   judge_source: "llm" | "rules" | null;
 };
 
+export type Message = { role: "user" | "opponent"; text: string; labels: string[]; audio_url?: string | null; pending?: boolean };
+
 export type SessionView = {
   id: string;
   scenario_id: string;
@@ -66,7 +77,8 @@ export type SessionView = {
   max_turns: number;
   state: TurnOut["state"];
   thresholds: { concede: number; breakdown_irritation: number; breakdown_trust: number };
-  messages: { role: "user" | "opponent"; text: string; labels: string[] }[];
+  mood: Mood;
+  messages: Message[];
 };
 
 export const store = {
@@ -75,11 +87,12 @@ export const store = {
 };
 
 export const AUTH_KEY = "arena.authToken";
+export const MODE_KEY = "arena.opponentMode";
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: RequestInit, json = true): Promise<T> {
   const token = store.get("arena.adminToken");
   const auth = store.get(AUTH_KEY);
-  const r = await fetch(path, { headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}), ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, ...init });
+  const r = await fetch(path, { headers: { ...(json ? { "Content-Type": "application/json" } : {}), ...(token ? { "X-Admin-Token": token } : {}), ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, ...init });
   if (!r.ok) {
     const detail = (await r.json().catch(() => ({}))).detail;
     throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail ?? r.statusText);
@@ -108,5 +121,9 @@ export const api = {
   joinOrg: (code: string) => call<Org>("/api/orgs/join", { method: "POST", body: JSON.stringify({ code }) }),
   newInvite: () => call<Org>("/api/orgs/me/invite", { method: "POST" }),
   orgStats: (period: Period) => call<{ org: Org; period: Period; members: MemberStats[] }>(`/api/orgs/me/stats?period=${period}`),
+  voiceTurn: (sid: string, audio: Blob, name: string) => { const f = new FormData(); f.append("audio", audio, name); return call<VoiceTurnOut>(`/api/sessions/${sid}/voice`, { method: "POST", body: f }, false); },
+  voiceStatus: () => call<VoiceStatus>("/api/voice/status"),
+  tts: (text: string, emotion: Mood, voice: ScenarioCard["voice"]) => call<Speech>("/api/tts", { method: "POST", body: JSON.stringify({ text, emotion, voice }) }),
+  uploadAvatar: (file: File) => { const f = new FormData(); f.append("file", file, file.name); return call<AvatarUpload>("/api/avatars", { method: "POST", body: f }, false); },
   leaderboard: (scope: "org" | "global", period: Period) => call<Board>(`/api/leaderboard?scope=${scope}&period=${period}`),
 };

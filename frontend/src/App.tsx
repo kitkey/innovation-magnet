@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile, UserIcon } from "./account";
-import { api, AUTH_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, User } from "./api";
-import OpponentAvatar from "./OpponentAvatar";
+import { api, AUTH_KEY, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, User, VoiceStatus } from "./api";
+import type { Say } from "./avatar/Avatar3D";
+import { MicIcon } from "./icons";
+import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
+import Recorder from "./voice/Recorder";
 
 type View = { name: "list" } | { name: "setup"; scenario?: Scenario } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" }
   | { name: "auth" } | { name: "profile" } | { name: "org" } | { name: "leaderboard" };
@@ -34,7 +37,7 @@ const EMPTY: ScenarioCard = {
   name: "", domain: "", topic: "", difficulty: "medium", tone: "neutral", method: "free", style: "hard",
   user_role: "", user_goal: "", opponent_role: "", opponent_goal: "", opponent_hidden_interests: [],
   opponent_batna: "", user_batna: "", target_zone: { unit: "", user_start: 0, zone_min: 0, zone_max: 0, opponent_start: 0 },
-  mandatory_details: [], context: "", max_turns: 10, locked_by_org: false,
+  mandatory_details: [], context: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null,
 };
 
 export default function App() {
@@ -114,6 +117,32 @@ function List({ user, go }: { user: User | null; go: Go }) {
   );
 }
 
+function AvatarField({ value, onChange }: { value: string | null; onChange: (url: string | null) => void }) {
+  const [info, setInfo] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const upload = async (f: File | undefined) => {
+    if (!f) return;
+    setErr(""); setInfo(""); setBusy(true);
+    try {
+      const r = await api.uploadAvatar(f);
+      onChange(r.url);
+      setInfo(`Загружено: ${(r.size / 1048576).toFixed(1)} МБ, визем ${r.visemes}. ${r.warnings.join(". ")}`);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <fieldset><legend>3D-аватар собеседника</legend>
+      <p className="small muted">{value ? `Свой аватар: ${value}` : "Стандартный аватар (MPFB, CC0)."} GLB со скелетом в стиле Mixamo, виземами Oculus и ARKit-блендшейпами: Avaturn, VRoid через Blender, MPFB. Как сделать — в README.</p>
+      <div className="row">
+        <label className="file">{busy ? "Загружаем…" : "Загрузить GLB"}<input type="file" accept=".glb,model/gltf-binary" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} /></label>
+        {value && <button onClick={() => onChange(null)}>Вернуть стандартный</button>}
+      </div>
+      {info && <p className="small">{info}</p>}
+      {err && <p className="error">{err}</p>}
+    </fieldset>
+  );
+}
+
 function lines(v: string) { return v.split("\n").map((x) => x.trim()).filter(Boolean); }
 
 function Setup({ scenario, go }: { scenario?: Scenario; go: Go }) {
@@ -165,6 +194,8 @@ function Setup({ scenario, go }: { scenario?: Scenario; go: Go }) {
       </fieldset>
       <label>Обязательные детали (по строке)<textarea value={card.mandatory_details.join("\n")} onChange={(e) => set("mandatory_details", lines(e.target.value))} /></label>
       {text("context", "Контекст", true)}
+      {select("voice", "Голос собеседника в режиме «3D и голос»", [["female", "Женский"], ["male", "Мужской"]])}
+      <AvatarField value={card.avatar_url} onChange={(v) => set("avatar_url", v)} />
       <label>Лимит ходов<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
       <label className="check"><input type="checkbox" checked={card.locked_by_org} onChange={(e) => set("locked_by_org", e.target.checked)} />Зафиксировать для сотрудников организации</label>
       <label>Токен администратора (запасной способ; администратор организации фиксирует и меняет сценарии своей организации без токена)<input type="password" value={token} onChange={(e) => saveToken(e.target.value)} /></label>
@@ -189,16 +220,41 @@ function Chips({ labels }: { labels: string[] }) {
   return <div className="chips">{labels.map((l) => <span key={l} className={`chip ${BAD_LABELS.has(l) ? "bad" : ""}`}>{LABEL_RU[l] ?? l}</span>)}</div>;
 }
 
+function VoiceMsg({ m }: { m: Message }) {
+  return (
+    <div className="msg user voice">
+      <span className="voice-tag"><MicIcon size={14} />голосовое</span>
+      {m.audio_url && <audio controls preload="none" src={m.audio_url} />}
+      <div>{m.text}</div>
+    </div>
+  );
+}
+
 function Dialog({ sid, go }: { sid: string; go: Go }) {
   const [s, setS] = useState<SessionView | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [mode, setModeState] = useState<OpponentMode>(() => (store.get(MODE_KEY) === "avatar" ? "avatar" : "text"));
+  const [vs, setVs] = useState<VoiceStatus | null>(null);
+  const [say, setSay] = useState<Say | null>(null);
+  const setMode = (m: OpponentMode) => { setModeState(m); store.set(MODE_KEY, m); };
+  useEffect(() => { api.voiceStatus().then(setVs).catch(() => setVs(null)); }, []);
   const load = () => api.session(sid).then((v) => {
     if (v.status !== "active") { store.set(ACTIVE_KEY, null); go({ name: "result", sid }); return; }
     store.set(ACTIVE_KEY, sid); setS(v);
   }).catch((e) => setErr(`Сессия не загрузилась: ${e.message}`));
   useEffect(() => { load(); }, [sid]);
+
+  const apply = (base: SessionView, user: Message, r: TurnOut) => {
+    setS({
+      ...base, turn: r.turn, status: r.status, outcome: r.outcome, state: r.state, mood: r.mood,
+      messages: [...base.messages, user, { role: "opponent", text: r.opponent_message, labels: [] }],
+    });
+    setSay({ id: r.turn, text: r.opponent_message, mood: r.mood });
+    // В режиме 3D даём собеседнику договорить последнюю реплику, потом открываем разбор
+    if (r.status === "finished") { store.set(ACTIVE_KEY, null); window.setTimeout(() => go({ name: "result", sid }), mode === "avatar" ? 6000 : 0); }
+  };
 
   const send = async () => {
     if (!s || !msg.trim() || busy) return;
@@ -208,14 +264,26 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
     try {
       const r = await api.turn(sid, text);
       setMsg("");
-      setS({
-        ...s, turn: r.turn, status: r.status, outcome: r.outcome, state: r.state,
-        messages: [...s.messages, { role: "user", text, labels: r.analysis.labels }, { role: "opponent", text: r.opponent_message, labels: [] }],
-      });
-      if (r.status === "finished") { store.set(ACTIVE_KEY, null); go({ name: "result", sid }); }
+      apply(s, { role: "user", text, labels: r.analysis.labels }, r);
     } catch (e) {
       setS(s);
       setErr(`Ход не отправлен: ${(e as Error).message}. Попробуйте ещё раз.`);
+    } finally { setBusy(false); }
+  };
+
+  const sendVoice = async (wav: Blob) => {
+    if (!s || busy) return false;
+    const local = URL.createObjectURL(wav);
+    setBusy(true); setErr("");
+    setS({ ...s, messages: [...s.messages, { role: "user", text: "Распознаём…", labels: [], audio_url: local, pending: true }] });
+    try {
+      const r = await api.voiceTurn(sid, wav, "voice.wav");
+      apply(s, { role: "user", text: r.recognized, labels: r.analysis.labels, audio_url: r.audio_url ?? local }, r);
+      return true;
+    } catch (e) {
+      setS(s);
+      setErr(`Голосовое не отправлено: ${(e as Error).message}`);
+      return false;
     } finally { setBusy(false); }
   };
   const finish = async () => {
@@ -235,15 +303,23 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   return (
     <main className="dialog">
       <p className="muted">{s.card.user_role} ↔ {s.card.opponent_role}. Цель: {s.card.user_goal}</p>
-      <OpponentAvatar role={s.card.opponent_role} />
+      <div className="row between">
+        <span className="small muted">Собеседник</span>
+        <div className="tabs">{([["text", "Текст"], ["avatar", "3D и голос"]] as [OpponentMode, string][]).map(([v, t]) => (
+          <button key={v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{t}</button>
+        ))}</div>
+      </div>
+      <OpponentAvatar role={s.card.opponent_role} mode={mode} avatarUrl={s.card.avatar_url ?? null} gender={s.card.voice ?? "female"}
+        mood={s.mood ?? "neutral"} say={say} ttsReady={!!vs?.tts} />
       <section className="bars">
         <Bar label="Доверие" value={(s.state.trust - t.breakdown_trust) / (10 - t.breakdown_trust)} hint="Растёт от вопросов об интересах и эмпатии, падает от давления" />
         <Bar label="Терпение" value={1 - s.state.irritation / t.breakdown_irritation} hint="Когда кончится, собеседник прервёт переговоры" />
         <Bar label="Готовность уступить" value={s.state.readiness / t.concede} hint="На 100% собеседник сдвигает позицию" />
         <p className="small muted">Позиция собеседника: {s.state.position} {s.card.target_zone.unit} · ход {s.turn}/{s.max_turns}</p>
       </section>
-      <div className="log">{s.messages.map((m, i) => (
-        <div key={i} className={`msg ${m.role === "user" ? "user" : "opp"}`}>{m.text}</div>
+      <div className="log">{s.messages.map((m, i) => (m.role === "user" && m.audio_url
+        ? <VoiceMsg key={i} m={m} />
+        : <div key={i} className={`msg ${m.role === "user" ? "user" : "opp"}`}>{m.text}</div>
       ))}</div>
       {lastUser && <div className="small"><span className="muted">Ваш последний ход: </span><Chips labels={lastUser.labels} /></div>}
       {err && <p className="error">{err}</p>}
@@ -251,6 +327,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
         <textarea value={msg} maxLength={2500} disabled={!ready} onChange={(e) => setMsg(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Ваша реплика" />
         <button className="primary" disabled={!ready || !msg.trim()} onClick={send}>{busy ? "…" : "Отправить"}</button>
+        <Recorder disabled={!ready} sttReady={!!vs?.stt} maxSeconds={vs?.max_seconds ?? 30} onSend={sendVoice} onError={setErr} />
       </div>
       <p className="small muted">{msg.length}/2500</p>
       <div className="row">

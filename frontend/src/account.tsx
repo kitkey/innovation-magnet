@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, AUTH_KEY, Board, MemberStats, Org, Period, store, User } from "./api";
+import { api, AUTH_KEY, Board, MemberStats, MODE_KEY, Org, Period, store, User } from "./api";
 
 export type SetUser = (u: User | null) => void;
 
@@ -56,6 +56,7 @@ export function Profile({ user, onUser }: { user: User; onUser: SetUser }) {
   const [orgName, setOrgName] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [mode, setMode] = useState<"text" | "avatar">(store.get(MODE_KEY) === "avatar" ? "avatar" : "text");
   const run = async (f: () => Promise<unknown>, ok: string) => {
     setErr(""); setMsg("");
     try { await f(); onUser(await api.me()); setMsg(ok); } catch (e) { setErr((e as Error).message); }
@@ -73,6 +74,9 @@ export function Profile({ user, onUser }: { user: User; onUser: SetUser }) {
         <button disabled={!name.trim() || name === user.display_name} onClick={() => run(() => api.updateProfile({ display_name: name }), "Имя сохранено")}>Сохранить</button></div></label>
       <label className="check"><input type="checkbox" checked={user.public_in_leaderboard}
         onChange={(e) => run(() => api.updateProfile({ public_in_leaderboard: e.target.checked }), "Настройка сохранена")} />Показывать меня в общем лидерборде</label>
+      <label>Собеседник по умолчанию<Tabs value={mode} options={[["text", "Текст"], ["avatar", "3D и голос"]]}
+        onChange={(m) => { setMode(m); store.set(MODE_KEY, m); }} /></label>
+      <p className="small muted">В режиме «3D и голос» собеседник отвечает голосом и мимикой, текст ответа всё равно остаётся в чате. Переключается и в самом диалоге.</p>
       <section className="panel">
         <h3>Организация</h3>
         {user.org_id ? <p>{user.org_name} · {ROLE_RU[user.role]}</p> : (

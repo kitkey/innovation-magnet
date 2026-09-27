@@ -70,3 +70,25 @@ tr.me td { font-weight: 600; }
 .avatar-slot { display: grid; place-items: center; min-height: 120px; margin: 8px 0; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 14px; }
 input[type="checkbox"] { width: auto; }
 .form h2, .form h3 { margin: 0; }
+.avatar-slot .small { display: block; margin-top: 4px; }
+.avatar-slot { flex-direction: column; text-align: center; padding: 8px; }
+.avatar-stage { position: relative; height: 340px; margin: 8px 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: linear-gradient(#eef1f6, #dde2ea); }
+.avatar-canvas { position: absolute; inset: 0; }
+.avatar-over { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.subtitle { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 6px 10px; border-radius: 8px; background: rgba(29, 35, 48, .72); color: #fff; font-size: 14px; text-align: center; }
+.avatar-note { position: absolute; top: 8px; left: 12px; right: 12px; margin: 0; }
+.recorder { display: flex; gap: 8px; align-items: center; }
+.recorder audio { height: 36px; max-width: 220px; }
+.recorder button { display: inline-flex; align-items: center; justify-content: center; }
+button.mic { touch-action: none; user-select: none; -webkit-user-select: none; }
+button.mic.on { background: #b42318; border-color: #b42318; color: #fff; }
+button.mic.off { color: var(--muted); }
+.rec-hint { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #b42318; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.msg.voice { display: grid; gap: 6px; }
+.msg.voice audio { height: 32px; max-width: 100%; }
+.voice-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; opacity: .85; }
+label.file { display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+label.file input { display: none; }
+@media (max-width: 520px) { .avatar-stage { height: 260px; } .rec-hint { white-space: normal; } }
