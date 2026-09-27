@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from difflib import SequenceMatcher
 from uuid import uuid4
 
-from . import llm
+from . import llm, voice
 from .config import settings
 from .db import SessionRow, TurnRow
 from .engine import offline, rules
@@ -57,7 +57,7 @@ def _guard_reply(card: ScenarioCard, state: OpponentState, reply: str) -> bool:
     return not any(rules.better_for_user(card, v, state.position) for v in offline.values(card, reply))
 
 
-def turn(db, row: SessionRow, message: str) -> TurnOut:
+def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> TurnOut:
     if row.status != "active":
         raise SessionClosed
     card = ScenarioCard(**row.card)
@@ -99,13 +99,13 @@ def turn(db, row: SessionRow, message: str) -> TurnOut:
     else:
         reply = offline.reply(card, state, move, conceded)
 
-    row.turns.append(TurnRow(role="user", text=message, analysis=move.model_dump()))
+    row.turns.append(TurnRow(role="user", text=message, analysis=move.model_dump(), audio_url=audio_url))
     row.turns.append(TurnRow(role="opponent", text=reply))
     row.state = state.model_dump()
     if outcome:
         row.status, row.outcome, row.agreed_value = "finished", outcome, value
     db.commit()
-    return TurnOut(turn=row.turn, opponent_message=reply, status=row.status, outcome=outcome, analysis=move, state=state)
+    return TurnOut(turn=row.turn, opponent_message=reply, status=row.status, outcome=outcome, analysis=move, state=state, mood=voice.mood_for(card, state, outcome))
 
 
 def finish(db, row: SessionRow) -> None:
@@ -130,7 +130,7 @@ def rewind(db, row: SessionRow, keep: int) -> SessionRow:
     new.turns.append(TurnRow(role="opponent", text=row.turns[0].text))
     for user, opp in pairs[:keep]:
         state, _ = rules.apply_move(card, state, MoveAnalysis(**user.analysis))
-        new.turns.append(TurnRow(role="user", text=user.text, analysis=user.analysis))
+        new.turns.append(TurnRow(role="user", text=user.text, analysis=user.analysis, audio_url=user.audio_url))
         if opp is not None:
             new.turns.append(TurnRow(role="opponent", text=opp.text))
     new.state = state.model_dump()
@@ -144,9 +144,9 @@ def view(row: SessionRow) -> dict:
     diff = rules.DIFFICULTY[card.difficulty]
     return {
         "id": row.id, "scenario_id": row.scenario_id, "card": row.card, "status": row.status, "outcome": row.outcome,
-        "turn": row.turn, "max_turns": card.max_turns, "state": row.state,
+        "turn": row.turn, "max_turns": card.max_turns, "state": row.state, "mood": voice.mood_for(card, OpponentState(**row.state), row.outcome),
         "thresholds": {"concede": diff["concede_threshold"], "breakdown_irritation": diff["breakdown_irritation"], "breakdown_trust": -6},
-        "messages": [{"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", [])} for t in row.turns],
+        "messages": [{"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", []), "audio_url": t.audio_url} for t in row.turns],
     }
 
 

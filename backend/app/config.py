@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     offline_mode: bool = False
     incomplete_session_min_turns: int = 3
     admin_token: str = ""
+    yandex_api_key: str = ""
+    yandex_folder_id: str = ""
+    voice_timeout: float = 20.0
+    voice_max_seconds: int = 30
+    uploads_dir: str = ""
+    avatar_max_mb: int = 30
+    uploads_max_mb: int = 1024
 
 
 settings = Settings()

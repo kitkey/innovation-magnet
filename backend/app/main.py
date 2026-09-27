@@ -2,16 +2,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import llm, service
+from . import llm, service, voice
 from .accounts import current_user, router as accounts_router
 from .config import settings
 from .db import ScenarioRow, SessionLocal, SessionRow, UserRow, get_db, init_db
-from .schemas import RewindIn, Scenario, ScenarioBrief, ScenarioCard, SessionResult, TurnIn, TurnOut
+from .schemas import RewindIn, Scenario, ScenarioBrief, ScenarioCard, SessionResult, TtsIn, TurnIn, TurnOut, VoiceTurnOut
 from .seeds import SEEDS
 
 
@@ -102,7 +102,7 @@ def generate_scenario(brief: ScenarioBrief):
     if settings.offline_mode:
         raise HTTPException(503, "Генерация недоступна без LLM")
     try:
-        return llm.generate_card(brief.description)
+        return llm.generate_card(brief.description).model_copy(update={"avatar_url": None})
     except Exception as exc:
         raise HTTPException(502, f"LLM недоступна: {exc}") from exc
 
@@ -138,6 +138,55 @@ def make_turn(session_id: str, payload: TurnIn, db=Depends(get_db), user: UserRo
             raise HTTPException(409, "Сессия уже завершена") from None
 
 
+@app.post("/api/sessions/{session_id}/voice", response_model=VoiceTurnOut)
+def voice_turn(session_id: str, audio: UploadFile = File(...), db=Depends(get_db), user: UserRow | None = Depends(current_user)):
+    """Голосовая реплика: запись → распознавание → обычный ход. Распознанный текст уходит в разметку, как если бы его напечатали."""
+    row = _session(db, session_id, user)
+    if row.status != "active":
+        raise HTTPException(409, "Сессия уже завершена")
+    if not voice.stt_ready():
+        raise HTTPException(503, voice.NOT_CONFIGURED)
+    data = audio.file.read(voice.MAX_AUDIO_BYTES + 1)
+    try:
+        prepared, ext = voice.prepare_audio(data)
+        text = voice.recognize(prepared)
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+    if not text:
+        raise HTTPException(422, "Речь не распознана: запишите ещё раз или напишите текстом")
+    url = voice.save_voice(data, ext)
+    with service.lock(session_id):
+        try:
+            out = service.turn(db, _session(db, session_id, user), text[:2500], audio_url=url)
+        except service.SessionClosed:
+            raise HTTPException(409, "Сессия уже завершена") from None
+    return VoiceTurnOut(**out.model_dump(), recognized=text, audio_url=url)
+
+
+@app.get("/api/voice/status")
+def voice_status():
+    return voice.status()
+
+
+@app.post("/api/tts")
+def tts(payload: TtsIn):
+    """Озвучка реплики собеседника: WAV в base64 и тайминги слов для липсинка. Без ключей 503, фронт тогда двигает губы беззвучно."""
+    try:
+        return voice.synthesize(payload.text, payload.emotion, payload.voice)
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+
+
+@app.post("/api/avatars")
+def upload_avatar(file: UploadFile = File(...)):
+    """Свой GLB-аватар для сценария: расширение, сигнатура glTF 2.0, лимит размера, узлы скелета. Ссылку кладут в avatar_url карточки."""
+    data = file.file.read(settings.avatar_max_mb * 1024 * 1024 + 1)
+    try:
+        return voice.save_avatar(data, file.filename or "")
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+
+
 @app.post("/api/sessions/{session_id}/finish")
 def finish_session(session_id: str, db=Depends(get_db), user: UserRow | None = Depends(current_user)):
     with service.lock(session_id):
@@ -168,10 +217,18 @@ def list_sessions(db=Depends(get_db), user: UserRow | None = Depends(current_use
     return [{"id": r.id, "scenario": r.card["name"], "status": r.status, "outcome": r.outcome, "turns": r.turn} for r in rows]
 
 
+UPLOADS = voice.uploads_dir()
+UPLOADS.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
+
 STATIC = Path(__file__).resolve().parent.parent / "static"
 if STATIC.exists():
     app.mount("/assets", StaticFiles(directory=STATIC / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        """Файлы из корня сборки (модель аватара и т. п.) отдаём как есть, остальные пути — страница приложения."""
+        f = (STATIC / path).resolve()
+        if path and f.is_file() and STATIC.resolve() in f.parents:
+            return FileResponse(f)
         return FileResponse(STATIC / "index.html")

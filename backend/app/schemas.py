@@ -25,6 +25,8 @@ MoveLabel = Literal[
     "accept",
     "manipulation",
 ]
+Mood = Literal["neutral", "happy", "angry", "sad", "disgust"]
+AVATAR_URL = r"^/(uploads/avatars|avatars)/[A-Za-z0-9_.\-]+\.glb$"
 Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "breakdown", "turn_limit", "user_finished"]
 
 
@@ -67,6 +69,13 @@ class ScenarioCard(BaseModel):
     context: str
     max_turns: int = Field(default=10, ge=3, le=30)
     locked_by_org: bool = False
+    voice: Literal["female", "male"] = Field(default="female", description="голос собеседника в режиме 3D и голос")
+    avatar_url: str | None = Field(default=None, pattern=AVATAR_URL, description="GLB-аватар собеседника; при генерации карточки не заполняй")
+
+    @field_validator("avatar_url", mode="before")
+    @classmethod
+    def _empty_avatar(cls, v):
+        return v or None
 
 
 class Scenario(ScenarioCard):
@@ -102,6 +111,18 @@ class TurnOut(BaseModel):
     outcome: Outcome | None = None
     analysis: MoveAnalysis
     state: OpponentState
+    mood: Mood = "neutral"
+
+
+class VoiceTurnOut(TurnOut):
+    recognized: str
+    audio_url: str | None = None
+
+
+class TtsIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1500)
+    emotion: Mood = "neutral"
+    voice: Literal["female", "male"] = "female"
 
 
 class KeyMoment(BaseModel):

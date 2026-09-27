@@ -83,11 +83,12 @@ class TurnRow(Base):
     role: Mapped[str] = mapped_column(String(16))
     text: Mapped[str] = mapped_column(Text)
     analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    audio_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     session: Mapped[SessionRow] = relationship(back_populates="turns")
 
 
-ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)"}, "scenarios": {"org_id": "VARCHAR(32)"}}
+ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)"}, "scenarios": {"org_id": "VARCHAR(32)"}, "turns": {"audio_url": "VARCHAR(200)"}}
 
 
 def init_db(bind=None) -> None:
