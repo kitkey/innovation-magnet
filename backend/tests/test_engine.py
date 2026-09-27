@@ -1,14 +1,9 @@
-import os
+from fastapi.testclient import TestClient
 
-os.environ["OFFLINE_MODE"] = "true"
-os.environ["DATABASE_URL"] = "sqlite:///./test_arena.db"
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.engine import rules  # noqa: E402
-from app.main import app  # noqa: E402
-from app.schemas import MoveAnalysis  # noqa: E402
-from app.seeds import SEEDS  # noqa: E402
+from app.engine import rules
+from app.main import app
+from app.schemas import MoveAnalysis
+from app.seeds import SEEDS
 
 CARD = SEEDS["deadline-with-manager"]
 

@@ -15,21 +15,44 @@
 
 ## Запуск
 
+Нужны Python 3.12+ и Node.js 20+ (проверено на Python 3.13 и Node 24), браузер — актуальные Chrome, Firefox, Edge или Safari.
+
+`.env` лежит в корне репозитория, рядом с `docker-compose.yml`:
+
 ```bash
 cp env.example .env   # укажите LLM_MODEL и LLM_API_KEY или OFFLINE_MODE=true
+```
+
+Docker:
+
+```bash
 docker compose up --build
 ```
 
 Откройте http://localhost:8000.
 
-Без Docker:
+Без Docker нужны два терминала. Бэкенд читает `.env` и из своей папки, и из корня репозитория.
+
+Терминал 1, бэкенд (по умолчанию SQLite в `backend/arena.db`):
 
 ```bash
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
-cd frontend && npm install && npm run dev   # http://localhost:5173
+cd backend
+python -m venv ../.venv && ../.venv/Scripts/activate   # Linux/macOS: source ../.venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-Тесты: `cd backend && pytest`.
+Терминал 2, фронтенд (запросы к `/api` проксируются на порт 8000):
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:5173
+```
+
+Тесты: `cd backend && python -m pytest`. Тесты работают в режиме без LLM на временной SQLite и не трогают `arena.db`.
+
+`ADMIN_TOKEN` в `.env` включает права администратора: только с этим токеном (поле в форме сценария) можно фиксировать сценарий для сотрудников и менять зафиксированный.
 
 ## Документы
 

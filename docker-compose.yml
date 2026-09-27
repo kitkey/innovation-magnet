@@ -18,6 +18,7 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql+psycopg://arena:arena@db:5432/arena
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
