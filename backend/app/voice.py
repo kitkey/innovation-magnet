@@ -229,9 +229,11 @@ def recognize(audio: Audio) -> str:
         raise VoiceError(503, "На сервере не установлен grpcio, распознавание недоступно") from exc
     except Exception as exc:  # grpc.RpcError и сетевые ошибки
         code = getattr(exc, "code", None)
-        detail = f"{code().name}: {exc.details()}" if callable(code) else str(exc)
-        log.warning("Yandex STT failed: %s", detail)
-        raise VoiceError(502, f"Сервис распознавания не ответил ({detail}). Попробуйте ещё раз или напишите текстом") from exc
+        name = code().name if callable(code) else ""
+        log.warning("Yandex STT failed: %s %s", name, exc.details() if callable(getattr(exc, "details", None)) else exc)
+        if name in ("UNAUTHENTICATED", "PERMISSION_DENIED"):
+            raise VoiceError(502, "Yandex не принял ключ распознавания: проверьте YANDEX_API_KEY и роль ai.speechkit-stt.user. Пока напишите текстом") from exc
+        raise VoiceError(502, "Сервис распознавания не ответил. Попробуйте ещё раз или напишите текстом") from exc
     return stt_text(responses)
 
 
@@ -293,7 +295,10 @@ def _tts_call(text: str, voice: str, role: str, speed: float) -> str:
     }
     r = httpx.post(TTS_URL, json=body, headers=dict(_auth()), timeout=settings.voice_timeout)
     if r.status_code != 200:
-        raise VoiceError(502, f"Сервис синтеза ответил {r.status_code}: {r.text[:200]}")
+        log.warning("Yandex TTS failed: %s %s", r.status_code, r.text[:300])
+        if r.status_code in (401, 403):
+            raise VoiceError(502, "Yandex не принял ключ синтеза: проверьте YANDEX_API_KEY и роль ai.speechkit-tts.user")
+        raise VoiceError(502, f"Сервис синтеза ответил {r.status_code}")
     return r.text
 
 

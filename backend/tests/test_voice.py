@@ -186,6 +186,23 @@ def test_stt_failure_is_502_and_turn_not_made(client, keys, monkeypatch):
     assert client.get(f"/api/sessions/{sid}").json()["turn"] == 0
 
 
+def test_rejected_key_names_the_role(keys, monkeypatch):
+    class Unauth(Exception):
+        def code(self):
+            return type("C", (), {"name": "UNAUTHENTICATED"})()
+
+        def details(self):
+            return "Unknown api key"
+
+    def boom(_):
+        raise Unauth()
+
+    monkeypatch.setattr(voice, "_stt_call", boom)
+    with pytest.raises(voice.VoiceError) as e:
+        voice.recognize(voice.Audio("pcm", b"\0\0" * 16000))
+    assert e.value.status == 502 and "ai.speechkit-stt.user" in e.value.message
+
+
 def test_silence_is_422(client, keys, monkeypatch):
     monkeypatch.setattr(voice, "_stt_call", lambda _: stt_responses(("", "")))
     sid = start(client)

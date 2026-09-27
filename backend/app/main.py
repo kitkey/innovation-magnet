@@ -1,3 +1,4 @@
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -217,6 +218,7 @@ def list_sessions(db=Depends(get_db), user: UserRow | None = Depends(current_use
     return [{"id": r.id, "scenario": r.card["name"], "status": r.status, "outcome": r.outcome, "turns": r.turn} for r in rows]
 
 
+mimetypes.add_type("model/gltf-binary", ".glb")
 UPLOADS = voice.uploads_dir()
 UPLOADS.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
