@@ -236,13 +236,15 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [mode, setModeState] = useState<OpponentMode>(() => (store.get(MODE_KEY) === "avatar" ? "avatar" : "text"));
-  const [vs, setVs] = useState<VoiceStatus | null>(null);
+  const [vs, setVs] = useState<VoiceStatus | null | undefined>(undefined);
   const [say, setSay] = useState<Say | null>(null);
   const setMode = (m: OpponentMode) => { setModeState(m); store.set(MODE_KEY, m); };
   useEffect(() => { api.voiceStatus().then(setVs).catch(() => setVs(null)); }, []);
   const load = () => api.session(sid).then((v) => {
     if (v.status !== "active") { store.set(ACTIVE_KEY, null); go({ name: "result", sid }); return; }
     store.set(ACTIVE_KEY, sid); setS(v);
+    const last = v.messages[v.messages.length - 1];
+    if (last?.role === "opponent") setSay({ id: v.turn, text: last.text, mood: v.mood ?? "neutral" });
   }).catch((e) => setErr(`Сессия не загрузилась: ${e.message}`));
   useEffect(() => { load(); }, [sid]);
 
@@ -310,7 +312,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
         ))}</div>
       </div>
       <OpponentAvatar role={s.card.opponent_role} mode={mode} avatarUrl={s.card.avatar_url ?? null} gender={s.card.voice ?? "female"}
-        mood={s.mood ?? "neutral"} say={say} ttsReady={!!vs?.tts} />
+        mood={s.mood ?? "neutral"} say={vs === undefined ? null : say} ttsReady={!!vs?.tts} />
       <section className="bars">
         <Bar label="Доверие" value={(s.state.trust - t.breakdown_trust) / (10 - t.breakdown_trust)} hint="Растёт от вопросов об интересах и эмпатии, падает от давления" />
         <Bar label="Терпение" value={1 - s.state.irritation / t.breakdown_irritation} hint="Когда кончится, собеседник прервёт переговоры" />
