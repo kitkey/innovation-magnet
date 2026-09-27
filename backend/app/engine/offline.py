@@ -54,6 +54,7 @@ AXIS_LABELS = {
     "конкретные предложения": ({"concrete_offer", "option_generation"}, None),
     "контроль эмоций": ({"empathy"}, {"pressure", "personal_attack", "manipulation"}),
 }
+METHOD_RU = {"spin": "SPIN", "harvard": "Гарвардский", "free": "свободный"}
 AXIS_TIPS = {
     "ситуационные вопросы": "Начните с вопросов о текущей ситуации собеседника: как сейчас устроена работа, какие сроки и ресурсы.",
     "проблемные вопросы": "Спросите, что собеседника не устраивает и какие трудности он видит.",
@@ -176,5 +177,5 @@ def judge_offline(card: ScenarioCard, turns: list[tuple[str, MoveAnalysis]]) -> 
         good, _ = AXIS_LABELS[weak]
         text = next((t for t, m in turns if not good & set(m.labels)), turns[0][0])
         moments.append(KeyMoment(quote=text, problem=f"Здесь не хватило приёма «{weak}».", better=AXIS_TIPS[weak]))
-    hint = f"Слабее всего ось «{weak}» ({axes[weak]}/100). {AXIS_TIPS[weak]} Пройдите этот же сценарий ещё раз или возьмите сценарий с методом «{card.method}» посложнее."
+    hint = f"Слабее всего ось «{weak}» ({axes[weak]}/100). {AXIS_TIPS[weak]} Пройдите этот же сценарий ещё раз или возьмите сценарий с методом «{METHOD_RU[card.method]}» посложнее."
     return JudgeReport(axes=axes, key_moments=moments, next_scenario_hint=hint)
