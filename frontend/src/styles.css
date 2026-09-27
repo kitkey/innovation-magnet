@@ -31,3 +31,20 @@ fieldset { border: 1px solid var(--line); border-radius: 12px; display: grid; ga
 .error { color: #b42318; }
 .history li { cursor: pointer; padding: 6px 0; }
 @media (max-width: 520px) { .row { flex-direction: column; } .msg { max-width: 100%; } }
+.bars { display: grid; gap: 6px; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.bar { display: grid; grid-template-columns: 150px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 14px; }
+.track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.fill { height: 100%; background: var(--accent); transition: width .3s; }
+.fill.low { background: #b42318; }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+.chip.bad { border-color: #b42318; color: #b42318; }
+.banner { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--card); }
+.note { padding: 8px 12px; border-left: 3px solid var(--muted); background: var(--card); }
+.turns { display: grid; gap: 10px; padding-left: 20px; }
+.turns li p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.turns li button { margin-top: 6px; }
+.quiz { display: grid; gap: 8px; }
+.quiz > button { text-align: left; }
+button.link { border: none; background: none; color: var(--muted); text-decoration: underline; justify-self: start; }
+@media (max-width: 520px) { .bar { grid-template-columns: 110px minmax(0, 1fr) 40px; } }
