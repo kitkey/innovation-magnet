@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { api, Scenario, ScenarioCard, SessionResult, SessionView, store } from "./api";
+import { Auth, Leaderboard, OrgCabinet, Profile, UserIcon } from "./account";
+import { api, AUTH_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, User } from "./api";
+import OpponentAvatar from "./OpponentAvatar";
 
-type View = { name: "list" } | { name: "setup"; scenario?: Scenario } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" };
+type View = { name: "list" } | { name: "setup"; scenario?: Scenario } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" }
+  | { name: "auth" } | { name: "profile" } | { name: "org" } | { name: "leaderboard" };
 type Go = (v: View) => void;
 
 const OUTCOME: Record<string, string> = {
@@ -36,6 +39,11 @@ const EMPTY: ScenarioCard = {
 
 export default function App() {
   const [view, setView] = useState<View>(() => (store.get(TEST_KEY) ? { name: "list" } : { name: "test" }));
+  const [user, setUser] = useState<User | null>(null);
+  useEffect(() => {
+    if (store.get(AUTH_KEY)) api.me().then(setUser).catch(() => store.set(AUTH_KEY, null));
+  }, []);
+  const onUser = (u: User | null) => { setUser(u); setView(u ? { name: "profile" } : { name: "list" }); };
   return (
     <div className="app">
       <header>
@@ -44,15 +52,22 @@ export default function App() {
           <button onClick={() => setView({ name: "list" })}>Сценарии</button>
           <button onClick={() => setView({ name: "setup" })}>Новый сценарий</button>
           <button onClick={() => setView({ name: "history" })}>История</button>
+          <button onClick={() => setView({ name: "leaderboard" })}>Лидерборд</button>
+          {user?.role === "org_admin" && <button onClick={() => setView({ name: "org" })}>Организация</button>}
           <button onClick={() => setView({ name: "test" })}>Входной тест</button>
+          <button className="user" onClick={() => setView(user ? { name: "profile" } : { name: "auth" })}><UserIcon />{user ? user.display_name : "Войти"}</button>
         </nav>
       </header>
-      {view.name === "list" && <List go={setView} />}
+      {view.name === "list" && <List key={user?.id ?? "guest"} user={user} go={setView} />}
       {view.name === "setup" && <Setup scenario={view.scenario} go={setView} />}
       {view.name === "dialog" && <Dialog key={view.sid} sid={view.sid} go={setView} />}
       {view.name === "result" && <Result key={view.sid} sid={view.sid} go={setView} />}
       {view.name === "history" && <History go={setView} />}
       {view.name === "test" && <EntryTest go={setView} />}
+      {view.name === "auth" && <Auth onUser={onUser} />}
+      {view.name === "profile" && (user ? <Profile user={user} onUser={(u) => (u ? setUser(u) : onUser(null))} /> : <Auth onUser={onUser} />)}
+      {view.name === "org" && (user?.role === "org_admin" ? <OrgCabinet key={user.org_id} /> : <main><p className="muted">Кабинет доступен администратору организации.</p></main>)}
+      {view.name === "leaderboard" && <Leaderboard key={user?.id ?? "guest"} user={user} />}
     </div>
   );
 }
@@ -61,11 +76,12 @@ async function startScenario(id: string, go: Go, setErr: (e: string) => void) {
   try { go({ name: "dialog", sid: (await api.start(id)).session_id }); } catch (e) { setErr(`Не удалось начать сессию: ${(e as Error).message}`); }
 }
 
-function List({ go }: { go: Go }) {
+function List({ user, go }: { user: User | null; go: Go }) {
   const [items, setItems] = useState<Scenario[]>([]);
   const [active, setActive] = useState<SessionView | null>(null);
   const [err, setErr] = useState("");
   const admin = !!store.get("arena.adminToken");
+  const canEdit = (s: Scenario) => !s.locked_by_org || admin || (user?.role === "org_admin" && !!s.org_id && s.org_id === user.org_id);
   useEffect(() => {
     api.scenarios().then(setItems).catch((e) => setErr(`Сценарии не загрузились: ${e.message}`));
     const sid = store.get(ACTIVE_KEY);
@@ -90,7 +106,7 @@ function List({ go }: { go: Go }) {
           <p>{s.topic}</p>
           <div className="row">
             <button className="primary" onClick={() => startScenario(s.id, go, setErr)}>Начать</button>
-            {(!s.locked_by_org || admin) && <button onClick={() => go({ name: "setup", scenario: s })}>Настроить</button>}
+            {canEdit(s) && <button onClick={() => go({ name: "setup", scenario: s })}>Настроить</button>}
           </div>
         </article>
       ))}
@@ -151,7 +167,7 @@ function Setup({ scenario, go }: { scenario?: Scenario; go: Go }) {
       {text("context", "Контекст", true)}
       <label>Лимит ходов<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
       <label className="check"><input type="checkbox" checked={card.locked_by_org} onChange={(e) => set("locked_by_org", e.target.checked)} />Зафиксировать для сотрудников организации</label>
-      <label>Токен администратора (нужен, чтобы фиксировать сценарии и менять зафиксированные)<input type="password" value={token} onChange={(e) => saveToken(e.target.value)} /></label>
+      <label>Токен администратора (запасной способ; администратор организации фиксирует и меняет сценарии своей организации без токена)<input type="password" value={token} onChange={(e) => saveToken(e.target.value)} /></label>
       {err && <p className="error">{err}</p>}
       <button className="primary" onClick={save}>Сохранить и начать</button>
     </main>
@@ -219,6 +235,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   return (
     <main className="dialog">
       <p className="muted">{s.card.user_role} ↔ {s.card.opponent_role}. Цель: {s.card.user_goal}</p>
+      <OpponentAvatar role={s.card.opponent_role} />
       <section className="bars">
         <Bar label="Доверие" value={(s.state.trust - t.breakdown_trust) / (10 - t.breakdown_trust)} hint="Растёт от вопросов об интересах и эмпатии, падает от давления" />
         <Bar label="Терпение" value={1 - s.state.irritation / t.breakdown_irritation} hint="Когда кончится, собеседник прервёт переговоры" />

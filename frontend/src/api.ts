@@ -22,7 +22,16 @@ export type ScenarioCard = {
   locked_by_org: boolean;
 };
 
-export type Scenario = ScenarioCard & { id: string };
+export type Scenario = ScenarioCard & { id: string; org_id: string | null };
+
+export type User = { id: string; login: string; display_name: string; role: "member" | "org_admin"; org_id: string | null; org_name: string | null; public_in_leaderboard: boolean };
+export type Org = { id: string; name: string; invite_code: string | null };
+export type Period = "week" | "month" | "all";
+export type MemberStats = {
+  id: string; login: string; display_name: string; role: User["role"]; sessions: number; training_minutes: number;
+  axes: Record<string, number>; in_zone_share: number | null; rating: number | null;
+};
+export type Board = { scope: "org" | "global"; period: Period; top_n: number; rows: { display_name: string; org_name: string | null; rating: number; sessions: number; me: boolean }[] };
 
 export type TurnOut = {
   turn: number;
@@ -65,9 +74,12 @@ export const store = {
   set: (k: string, v: string | null) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* приватный режим */ } },
 };
 
+export const AUTH_KEY = "arena.authToken";
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const token = store.get("arena.adminToken");
-  const r = await fetch(path, { headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}) }, ...init });
+  const auth = store.get(AUTH_KEY);
+  const r = await fetch(path, { headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}), ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, ...init });
   if (!r.ok) {
     const detail = (await r.json().catch(() => ({}))).detail;
     throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail ?? r.statusText);
@@ -87,4 +99,14 @@ export const api = {
   session: (sid: string) => call<SessionView>(`/api/sessions/${sid}`),
   rewind: (sid: string, turn: number) => call<SessionView>(`/api/sessions/${sid}/rewind`, { method: "POST", body: JSON.stringify({ turn }) }),
   history: () => call<{ id: string; scenario: string; status: string; outcome: string | null; turns: number }[]>("/api/sessions"),
+  register: (login: string, password: string, display_name: string) => call<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: JSON.stringify({ login, password, display_name }) }),
+  login: (login: string, password: string) => call<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
+  logout: () => call<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  me: () => call<User>("/api/auth/me"),
+  updateProfile: (p: { display_name?: string; public_in_leaderboard?: boolean }) => call<User>("/api/profile", { method: "PATCH", body: JSON.stringify(p) }),
+  createOrg: (name: string) => call<Org>("/api/orgs", { method: "POST", body: JSON.stringify({ name }) }),
+  joinOrg: (code: string) => call<Org>("/api/orgs/join", { method: "POST", body: JSON.stringify({ code }) }),
+  newInvite: () => call<Org>("/api/orgs/me/invite", { method: "POST" }),
+  orgStats: (period: Period) => call<{ org: Org; period: Period; members: MemberStats[] }>(`/api/orgs/me/stats?period=${period}`),
+  leaderboard: (scope: "org" | "global", period: Period) => call<Board>(`/api/leaderboard?scope=${scope}&period=${period}`),
 };
