@@ -15,6 +15,25 @@ export function estimateTimings(text: string): Timings {
   return out;
 }
 
+// Реплика кусками для субтитра: по предложениям, длинное предложение делится по словам (лучше на запятой) до max символов.
+export function subtitleChunks(text: string, max: number): { text: string; words: number }[] {
+  const out: { text: string; words: number }[] = [];
+  const push = (t: string) => { const w = t.split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length; if (t) out.push({ text: t, words: w }); };
+  for (const raw of text.match(/[^.!?…]+(?:[.!?…]+["»)]*|$)/g) ?? [text]) {
+    const sen = raw.trim();
+    if (!sen) continue;
+    if (sen.length <= max) { push(sen); continue; }
+    const per = sen.length / Math.ceil(sen.length / max);
+    let cur = "";
+    for (const w of sen.split(/\s+/)) {
+      if (cur && (cur.length + 1 + w.length > Math.min(max, per * 1.2) || (cur.length > per * 0.6 && /[,;:—]$/.test(cur)))) { push(cur); cur = w; }
+      else cur = cur ? `${cur} ${w}` : w;
+    }
+    push(cur);
+  }
+  return out;
+}
+
 export function b64ToArrayBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64);
   const buf = new Uint8Array(bin.length);

@@ -234,7 +234,11 @@ td.place .medal { margin-left: 6px; }
 .avatar-stage { position: absolute; inset: 0; }
 .avatar-canvas { position: absolute; inset: 0; }
 .avatar-over { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 16px; text-align: center; }
-.subtitle { position: absolute; left: 14px; right: 14px; bottom: 14px; text-align: center; text-wrap: balance; font-size: 14.5px; line-height: 1.45; font-weight: 600; color: #fff; background: rgba(22, 24, 63, .7); padding: 10px 14px; border-radius: 12px; }
+/* Субтитр: полоса у нижнего края сцены, не выше четверти её высоты и не больше двух строк, чтобы лицо оставалось видно.
+   Текст приходит кусками по предложениям синхронно с речью (Avatar3D), обрезка строк только страховка. */
+.subtitle { position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: 25%; overflow: hidden; display: flex; justify-content: center; pointer-events: none;
+  text-align: center; text-wrap: balance; font-size: 14px; line-height: 1.4; font-weight: 600; color: #fff; background: rgba(22, 24, 63, .72); padding: 6px 12px; border-radius: 10px; }
+.subtitle span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .avatar-note { position: absolute; bottom: 12px; left: 12px; right: 12px; margin: 0; font-size: 12px; line-height: 1.4; text-align: center; background: rgba(255, 255, 255, .8); color: var(--ink-2); border-radius: 8px; padding: 5px 8px; }
 .avatar-slot { position: absolute; inset: 0; display: grid; place-content: center; gap: 4px; padding: 16px; text-align: center; color: var(--muted); font-size: 14px; }
 .avatar-slot .small { display: block; }
@@ -464,7 +468,7 @@ button.replay:hover:not(:disabled) { background: var(--accent-soft); border-colo
   .stage { aspect-ratio: 16 / 10; max-height: none; }
   .stage.compact { aspect-ratio: auto; height: 130px; }
   .stage.textmode { display: none; }
-  .subtitle { font-size: 13px; padding: 8px 10px; left: 10px; right: 10px; bottom: 10px; }
+  .subtitle { font-size: 13px; line-height: 1.35; padding: 4px 10px; left: 8px; right: 8px; bottom: 8px; border-radius: 8px; }
   .whoopp b { font-size: 14px; }
   .whoopp .role { display: none; }
   .meters, .oppcol .pos { display: none; }
