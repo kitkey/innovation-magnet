@@ -106,7 +106,7 @@ def _unit_scale(unit: str) -> float:
 
 def values(card: ScenarioCard, text: str) -> list[float]:
     """Все числа из текста, которые правдоподобны как значение в единицах торга; с совпадающей единицей идут первыми."""
-    unit = card.target_zone.unit.lower()
+    unit = card.target_zone.short_unit.lower()
     unit_scale = _unit_scale(unit)
     percent_unit = "%" in unit or "процент" in unit
     unit_stems = [w[:max(2, min(3, len(w) - 2))] for w in re.findall(r"[a-zа-яё]+", unit) if len(w) > 2]
@@ -170,20 +170,20 @@ def analyze(card: ScenarioCard, message: str) -> MoveAnalysis:
 
 
 def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded: bool) -> str:
-    unit = card.target_zone.unit
+    pos = card.target_zone.fmt(state.position)
     labels = set(move.labels)
     if "manipulation" in labels:
-        return f"Давайте без этих приёмов. Моя позиция прежняя: {state.position:g} {unit}."
+        return f"Давайте без этих приёмов. Моя позиция прежняя: {pos}."
     if "batna_reference" in labels and labels & THREATS:
         return "Ссылка на альтернативу звучит как ультиматум. Объясните границу спокойно и предложите обмен условиями."
     if "pressure" in labels or "personal_attack" in labels:
         return "Давление не помогает. Объясните, что ваши условия дают моей стороне."
     if conceded:
-        return f"Хорошо, готов сдвинуться: {state.position:g} {unit}. Дальше нужны веские причины."
+        return f"Хорошо, могу сдвинуться: {pos}. Дальше нужны веские причины."
     if "interest_question" in labels and card.opponent_hidden_interests and state.trust >= 1:
         return f"Если честно, для меня важно другое: {card.opponent_hidden_interests[0]}."
     if {"boundary", "conditional_trade"} <= labels:
-        return f"Граница понятна, обмен выглядит предметно. Пока я на {state.position:g} {unit}: что именно вы готовы зафиксировать со своей стороны?"
+        return f"Граница понятна, обмен выглядит предметно. Пока я на {pos}: что именно вы готовы зафиксировать со своей стороны?"
     if {"batna_reference", "boundary"} <= labels:
         return "Понимаю вашу альтернативу и предел. Что должно измениться в моём варианте, чтобы он стал для вас лучше альтернативы?"
     if "batna_reference" in labels:
@@ -191,9 +191,9 @@ def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded
     if "boundary" in labels:
         return "Вы обозначили предел. Предложите обмен, который позволит не перейти эту границу."
     if "conditional_trade" in labels:
-        return f"Условный обмен конструктивен. Пока я на {state.position:g} {unit}: какую ценность получает каждая сторона?"
+        return f"Условный обмен конструктивен. Пока я на {pos}: какую ценность получает каждая сторона?"
     if "concrete_offer" in move.labels or "accept" in move.labels:
-        return f"Пока могу предложить {state.position:g} {unit}. Обоснуйте, почему ваш вариант справедлив."
+        return f"Пока могу предложить {pos}. Обоснуйте, почему ваш вариант справедлив."
     if "objective_criterion" in move.labels or "argument" in move.labels:
         return "Аргумент понятен. Как он переводится в конкретное предложение?"
     return "Позиция пока общая. Дайте конкретное предложение или спросите, что важно для меня."

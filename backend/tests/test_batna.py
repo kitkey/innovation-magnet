@@ -135,7 +135,7 @@ def test_walk_away_session_offline(client):
     res = client.get(f"/api/sessions/{sid}/result").json()
     assert res["outcome"] == "walk_away" and res["walk_away_justified"] is True
     assert res["final_position"] is None and res["judge"] is not None
-    assert "10 % роста цены" in res["walk_away_note"]
+    assert "стоял на 10%" in res["walk_away_note"]
     with SessionLocal() as db:
         row = db.get(SessionRow, sid)
         axes = scoring.judge_axes(row)

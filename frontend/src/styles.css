@@ -92,3 +92,10 @@ button.mic.off { color: var(--muted); }
 label.file { display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 label.file input { display: none; }
 @media (max-width: 520px) { .avatar-stage { height: 260px; } .rec-hint { white-space: normal; } }
+.brief { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+.brief summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.brief p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.brief dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 0; }
+.brief dt { color: var(--muted); }
+.brief dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .brief dl { grid-template-columns: minmax(0, 1fr); } .brief dd { margin-bottom: 4px; } }

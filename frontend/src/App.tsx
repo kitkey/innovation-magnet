@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { SyntheticEvent, useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile, UserIcon } from "./account";
-import { api, AUTH_KEY, editKeys, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, User, VoiceStatus } from "./api";
+import { api, AUTH_KEY, editKeys, fmtValue, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, unitParts, User, VoiceStatus } from "./api";
 import type { Say } from "./avatar/Avatar3D";
 import { MicIcon } from "./icons";
 import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
@@ -39,7 +39,7 @@ const EMPTY: ScenarioCard = {
   name: "", domain: "", topic: "", difficulty: "medium", tone: "neutral", method: "free", style: "hard",
   user_role: "", user_goal: "", opponent_role: "", opponent_goal: "", opponent_hidden_interests: [],
   opponent_batna: "", user_batna: "", target_zone: { unit: "", user_start: 0, zone_min: 0, zone_max: 0, opponent_start: 0 },
-  mandatory_details: [], context: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null,
+  mandatory_details: [], context: "", opening: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null,
 };
 
 export default function App() {
@@ -190,7 +190,7 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       <label>Скрытые интересы собеседника (по строке)<textarea value={card.opponent_hidden_interests.join("\n")} onChange={(e) => set("opponent_hidden_interests", lines(e.target.value))} /></label>
       {text("opponent_batna", "BATNA собеседника")}{text("user_batna", "Ваша BATNA")}
       <fieldset><legend>Целевая зона соглашения</legend>
-        <label>Единица<input value={card.target_zone.unit} onChange={(e) => setZone("unit", e.target.value)} /></label>
+        <label>Предмет и единица торга через запятую<input value={card.target_zone.unit} placeholder="стоимость доработки, тыс. руб." onChange={(e) => setZone("unit", e.target.value)} /></label>
         <label>Ваша стартовая позиция<input type="number" value={card.target_zone.user_start} onChange={(e) => setZone("user_start", e.target.value)} /></label>
         <label>Зона от<input type="number" value={card.target_zone.zone_min} onChange={(e) => setZone("zone_min", e.target.value)} /></label>
         <label>Зона до<input type="number" value={card.target_zone.zone_max} onChange={(e) => setZone("zone_max", e.target.value)} /></label>
@@ -199,6 +199,8 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       </fieldset>
       <label>Обязательные детали (по строке)<textarea value={card.mandatory_details.join("\n")} onChange={(e) => set("mandatory_details", lines(e.target.value))} /></label>
       {text("context", "Контекст", true)}
+      <label>Первая реплика собеседника<textarea value={card.opening ?? ""} placeholder="Если пусто, собеседник начнёт сам: с сути вопроса и своей стартовой позиции"
+        onChange={(e) => set("opening", e.target.value)} /></label>
       {select("voice", "Голос собеседника в режиме «3D и голос»", [["female", "Женский"], ["male", "Мужской"]])}
       <AvatarField value={card.avatar_url} onChange={(v) => set("avatar_url", v)} />
       <label>Лимит ходов<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
@@ -232,6 +234,29 @@ function VoiceMsg({ m }: { m: Message }) {
       {m.audio_url && <audio controls preload="none" src={m.audio_url} />}
       <div>{m.text}</div>
     </div>
+  );
+}
+
+const BRIEF_KEY = "arena.briefClosed";
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** Бриф перед диалогом: только то, что знает игрок. Скрытые интересы, альтернатива собеседника и целевая зона сюда не попадают. */
+function Brief({ card }: { card: ScenarioCard }) {
+  const [open, setOpen] = useState(() => store.get(BRIEF_KEY) !== "1");
+  const { subject, short } = unitParts(card.target_zone.unit);
+  const toggle = (e: SyntheticEvent<HTMLDetailsElement>) => { setOpen(e.currentTarget.open); store.set(BRIEF_KEY, e.currentTarget.open ? null : "1"); };
+  return (
+    <details className="brief" open={open} onToggle={toggle}>
+      <summary>Ситуация{!open && <span className="muted"> · {card.user_role}</span>}</summary>
+      {card.context && <p>{card.context}</p>}
+      <dl>
+        <dt>Ваша роль</dt><dd>{card.user_role}</dd>
+        <dt>Собеседник</dt><dd>{card.opponent_role}</dd>
+        <dt>Ваша цель</dt><dd>{card.user_goal}</dd>
+        {card.user_batna && <><dt>Ваша альтернатива</dt><dd>{card.user_batna}{card.method === "batna" && ". Если сделка хуже неё, можно выйти из переговоров."}</dd></>}
+        <dt>Предмет торга</dt><dd>{cap(subject || card.topic)} ({short}); вы начинаете с {fmtValue(card.target_zone.user_start, card.target_zone.unit)}</dd>
+      </dl>
+    </details>
   );
 }
 
@@ -309,8 +334,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   const ready = !busy && s.status === "active";
   return (
     <main className="dialog">
-      <p className="muted">{s.card.user_role} ↔ {s.card.opponent_role}. Цель: {s.card.user_goal}</p>
-      {s.card.method === "batna" && <p className="small muted">Ваша альтернатива: {s.card.user_batna}. Если сделка хуже неё, можно выйти из переговоров.</p>}
+      <Brief card={s.card} />
       <div className="row between">
         <span className="small muted">Собеседник</span>
         <div className="tabs">{([["text", "Текст"], ["avatar", "3D и голос"]] as [OpponentMode, string][]).map(([v, t]) => (
@@ -323,7 +347,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
         <Bar label="Доверие" value={(s.state.trust - t.breakdown_trust) / (10 - t.breakdown_trust)} hint="Растёт от вопросов об интересах и эмпатии, падает от давления" />
         <Bar label="Терпение" value={1 - s.state.irritation / t.breakdown_irritation} hint="Когда кончится, собеседник прервёт переговоры" />
         <Bar label="Готовность уступить" value={s.state.readiness / t.concede} hint="На 100% собеседник сдвигает позицию" />
-        <p className="small muted">Позиция собеседника: {s.state.position} {s.card.target_zone.unit} · ход {s.turn}/{s.max_turns}</p>
+        <p className="small muted">Позиция собеседника: {fmtValue(s.state.position, s.card.target_zone.unit)} · ход {s.turn}/{s.max_turns}</p>
       </section>
       <div className="log">{s.messages.map((m, i) => (m.role === "user" && m.audio_url
         ? <VoiceMsg key={i} m={m} />
@@ -365,7 +389,7 @@ function Result({ sid, go }: { sid: string; go: Go }) {
   return (
     <main className="result">
       <h2>{r.status === "active" ? "Сессия не завершена" : OUTCOME[r.outcome ?? ""] ?? r.outcome}</h2>
-      {r.final_position !== null && <p>Итог: {r.final_position} {s?.card.target_zone.unit}{r.position_shift !== null && ` (сдвиг от вашей стартовой позиции: ${r.position_shift})`}</p>}
+      {r.final_position !== null && <p>Итог: {s ? fmtValue(r.final_position, s.card.target_zone.unit) : r.final_position}{r.position_shift !== null && ` (сдвиг от вашей стартовой позиции: ${r.position_shift})`}</p>}
       {r.walk_away_note && <p className={r.walk_away_justified ? "" : "note"}>{r.walk_away_note}</p>}
       {r.incomplete && <p className="note">Меньше трёх реплик — полный разбор не строим.</p>}
       <p>Проговорено: {r.details_covered.join(", ") || "—"}</p>

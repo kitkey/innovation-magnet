@@ -35,7 +35,7 @@ Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "walk_away", "br
 
 
 class TargetZone(BaseModel):
-    unit: str = Field(min_length=1, description="единица торга: дни, проценты, рубли, число задач")
+    unit: str = Field(min_length=1, description="предмет и единица торга через запятую: «стоимость доработки, тыс. руб.», «срок сдачи, рабочих дней», «рост цены поставки, %»")
     user_start: float
     zone_min: float
     zone_max: float
@@ -51,6 +51,19 @@ class TargetZone(BaseModel):
         if not low <= self.zone_min <= self.zone_max <= high:
             raise ValueError("Целевая зона должна лежать между стартовыми позициями сторон")
         return self
+
+    @property
+    def subject(self) -> str:
+        """Что означает число: часть единицы до последней запятой («стоимость доработки»), пусто, если не указано."""
+        return self.unit.rsplit(",", 1)[0].strip() if "," in self.unit else ""
+
+    @property
+    def short_unit(self) -> str:
+        """Единица без предмета: «тыс. руб.», «рабочих дней», «%»."""
+        return self.unit.rsplit(",", 1)[1].strip() or self.unit if "," in self.unit else self.unit
+
+    def fmt(self, value: float) -> str:
+        return f"{value:g}%" if self.short_unit == "%" else f"{value:g} {self.short_unit}"
 
 
 class ScenarioCard(BaseModel):
@@ -71,6 +84,8 @@ class ScenarioCard(BaseModel):
     target_zone: TargetZone
     mandatory_details: list[str]
     context: str
+    opening: str = Field(default="", max_length=1500, description="первая реплика собеседника от его лица: суть вопроса и его стартовая позиция "
+                         "target_zone.opponent_start словами живого человека, в характере его стиля; должность не называет")
     max_turns: int = Field(default=10, ge=3, le=30)
     locked_by_org: bool = False
     voice: Literal["female", "male"] = Field(default="female", description="голос собеседника в режиме 3D и голос")

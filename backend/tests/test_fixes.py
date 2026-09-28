@@ -140,3 +140,51 @@ def test_locked_scenario_needs_admin_token(client):
     sc = client.post("/api/scenarios", json=card, headers={"X-Admin-Token": "test-admin"}).json()
     assert client.put(f"/api/scenarios/{sc['id']}", json=card).status_code == 403
     assert client.put(f"/api/scenarios/{sc['id']}", json=card, headers={"X-Admin-Token": "test-admin"}).status_code == 200
+
+
+@pytest.mark.parametrize("sid", list(SEEDS))
+def test_seed_opening_is_in_character(sid):
+    card = SEEDS[sid]
+    assert card.opening and card.opponent_role.split(",")[0] not in card.opening
+    assert service.opening_ok(card, card.opening)
+
+
+def test_seed_opening_is_first_message(client):
+    r = client.post("/api/sessions", params={"scenario_id": "alabuga-workshop-lease"}).json()
+    assert r["opening"] == ALABUGA.opening
+    new = client.post(f"/api/sessions/{r['session_id']}/rewind", json={"turn": 0}).json()
+    assert new["messages"][0]["text"] == ALABUGA.opening
+
+
+def test_template_opening_without_role(client):
+    card = PRICE.model_dump() | {"opening": ""}
+    sc = client.post("/api/scenarios", json=card).json()
+    text = client.post("/api/sessions", params={"scenario_id": sc["id"]}).json()["opening"]
+    assert PRICE.opponent_role not in text and "Директор" not in text
+    assert "130 тыс. руб" in text and "стоимость проекта" in text.lower()
+    assert service.opening_ok(PRICE, text)
+
+
+def test_llm_opening_checked_against_start(monkeypatch):
+    card = PRICE.model_copy(update={"opening": ""})
+    monkeypatch.setattr(settings, "offline_mode", False)
+    monkeypatch.setattr(llm, "opening_line", lambda c: "Смету видел. Готов заплатить 130 тысяч, не больше.")
+    assert service._opening(card) == "Смету видел. Готов заплатить 130 тысяч, не больше."
+    monkeypatch.setattr(llm, "opening_line", lambda c: "Ладно, дам 180 тысяч.")
+    assert service._opening(card) == service._template_opening(card)
+    monkeypatch.setattr(llm, "opening_line", lambda c: (_ for _ in ()).throw(RuntimeError("down")))
+    assert service._opening(card) == service._template_opening(card)
+
+
+def test_unit_subject_and_format():
+    z = SEEDS["supplier-price-batna"].target_zone
+    assert (z.subject, z.short_unit, z.fmt(3)) == ("рост цены поставки", "%", "3%")
+    assert TargetZone(unit="дни", user_start=1, zone_min=2, zone_max=3, opponent_start=4).fmt(2) == "2 дни"
+
+
+def test_guard_allows_echoing_user_number_with_own_position():
+    state = OpponentState(position=4.75)
+    msg = "Могу предложить скидку 2% при договоре на пять лет."
+    assert service._guard_reply(ALABUGA, state, "Скидка 2% нам не подходит. Мы готовы остановиться на 4,75%.", msg)
+    assert not service._guard_reply(ALABUGA, state, "Хорошо, пусть будет 2%.", msg)
+    assert not service._guard_reply(ALABUGA, state, "Могу 3%, а не 4,75%.", msg)

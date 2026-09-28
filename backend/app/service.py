@@ -39,22 +39,55 @@ def _use_llm() -> bool:
     return not settings.offline_mode
 
 
-def _opening(card: ScenarioCard, state: OpponentState) -> str:
-    return f"{card.opponent_role}. Слушаю вас. Моё предложение: {state.position:g} {card.target_zone.unit}."
+def _template_opening(card: ScenarioCard) -> str:
+    """Запасная первая реплика: без должности собеседника, с темой и стартовой позицией."""
+    z = card.target_zone
+    topic = card.topic.strip().rstrip(".")
+    lead = f"Давайте обсудим: {topic[:1].lower()}{topic[1:]}." if topic else "Давайте к делу."
+    pos = z.fmt(z.opponent_start).rstrip(".")
+    what = f"{z.subject[:1].upper()}{z.subject[1:]} — я исхожу из {pos}." if z.subject else f"Я исхожу из {pos}."
+    return f"{lead} {what} Что скажете?"
+
+
+def opening_ok(card: ScenarioCard, text: str) -> bool:
+    """Первая реплика называет стартовую позицию собеседника и не обещает больше неё."""
+    z = card.target_zone
+    found = offline.values(card, text)
+    if any(rules.better_for_user(card, v, z.opponent_start) for v in found):
+        return False
+    return z.opponent_start == 0 or any(abs(v - z.opponent_start) < 1e-9 for v in found)
+
+
+def _opening(card: ScenarioCard) -> str:
+    """Первая реплика: из карточки; иначе одна реплика LLM в образе; иначе шаблон."""
+    if card.opening.strip():
+        return card.opening.strip()
+    if _use_llm():
+        try:
+            text = llm.opening_line(card)
+            if text and opening_ok(card, text):
+                return text
+            log.warning("opening_line rejected: %s", text)
+        except Exception as exc:
+            log.warning("opening_line fallback: %s", exc)
+    return _template_opening(card)
 
 
 def start(db, scenario_id: str, card: ScenarioCard, user_id: str | None = None) -> SessionRow:
     state = rules.initial_state(card)
     row = SessionRow(id=uuid4().hex, scenario_id=scenario_id, card=card.model_dump(), state=state.model_dump(), user_id=user_id)
-    row.turns.append(TurnRow(role="opponent", text=_opening(card, state)))
+    row.turns.append(TurnRow(role="opponent", text=_opening(card)))
     db.add(row)
     db.commit()
     return row
 
 
-def _guard_reply(card: ScenarioCard, state: OpponentState, reply: str) -> bool:
-    """Собеседник не может назвать значение лучше для пользователя, чем его текущая позиция: уступки решают правила."""
-    return not any(rules.better_for_user(card, v, state.position) for v in offline.values(card, reply))
+def _guard_reply(card: ScenarioCard, state: OpponentState, reply: str, message: str = "") -> bool:
+    """Собеседник не может назвать значение лучше для пользователя, чем его текущая позиция: уступки решают правила.
+    Число из реплики пользователя собеседник может повторить, чтобы отказаться от него, если тут же называет свою позицию."""
+    found = offline.values(card, reply)
+    echoed = set(offline.values(card, message)) if any(abs(v - state.position) < 1e-9 for v in found) else set()
+    return not any(rules.better_for_user(card, v, state.position) and v not in echoed for v in found)
 
 
 def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> TurnOut:
@@ -82,7 +115,7 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
     outcome, value = rules.decide_outcome(card, state, move, row.turn)
 
     if outcome in ("agreement_in_zone", "agreement_out_of_zone"):
-        reply = f"Договорились: {value:g} {card.target_zone.unit}. Фиксируем."
+        reply = f"Договорились: {card.target_zone.fmt(value)}. Фиксируем."
     elif outcome == "walk_away":
         reply = "Понимаю. На этих условиях договориться не получается, расходимся без соглашения."
     elif outcome == "breakdown":
@@ -92,7 +125,7 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
     elif _use_llm():
         try:
             reply = llm.opponent_reply(card, state, move, conceded, history, message)
-            if not _guard_reply(card, state, reply):
+            if not _guard_reply(card, state, reply, message):
                 log.warning("opponent_reply named a value past position %s: %s", state.position, reply)
                 reply = offline.reply(card, state, move, conceded)
         except Exception as exc:
@@ -178,12 +211,12 @@ def sanitize_judge(card: ScenarioCard, report: JudgeReport, user_texts: list[str
 
 def walk_away_verdict(card: ScenarioCard, position: float) -> tuple[bool, str]:
     """Верно ли пользователь вышел к альтернативе: позиция собеседника на момент выхода против худшего края целевой зоны."""
-    unit, edge = card.target_zone.unit, rules.zone_boundary(card)
+    fmt, edge = card.target_zone.fmt, rules.zone_boundary(card)
     if rules.walk_away_justified(card, position):
-        return True, (f"Верное решение: собеседник стоял на {position:g} {unit}, это хуже границы целевой зоны ({edge:g} {unit}), "
+        return True, (f"Верное решение: собеседник стоял на {fmt(position)}, это хуже границы целевой зоны ({fmt(edge)}), "
                       f"выгодной сделки не было и альтернатива лучше: {card.user_batna}.")
-    return False, (f"Выход преждевременный: собеседник уже стоял на {position:g} {unit}, это не хуже границы целевой зоны "
-                   f"({edge:g} {unit}), сделка была не хуже вашей альтернативы.")
+    return False, (f"Выход преждевременный: собеседник уже стоял на {fmt(position)}, это не хуже границы целевой зоны "
+                   f"({fmt(edge)}), сделка была не хуже вашей альтернативы.")
 
 
 def result(db, row: SessionRow) -> SessionResult:

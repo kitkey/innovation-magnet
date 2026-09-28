@@ -1,5 +1,16 @@
 export type TargetZone = { unit: string; user_start: number; zone_min: number; zone_max: number; opponent_start: number };
 
+/** «стоимость доработки, тыс. руб.» → предмет торга и короткая единица, как TargetZone.subject/short_unit на сервере. */
+export function unitParts(unit: string): { subject: string; short: string } {
+  const i = unit.lastIndexOf(",");
+  return i < 0 ? { subject: "", short: unit } : { subject: unit.slice(0, i).trim(), short: unit.slice(i + 1).trim() || unit };
+}
+
+export function fmtValue(v: number, unit: string): string {
+  const { short } = unitParts(unit);
+  return short === "%" ? `${v}%` : `${v} ${short}`;
+}
+
 export type ScenarioCard = {
   name: string;
   domain: string;
@@ -18,6 +29,7 @@ export type ScenarioCard = {
   target_zone: TargetZone;
   mandatory_details: string[];
   context: string;
+  opening: string;
   max_turns: number;
   locked_by_org: boolean;
   voice: "female" | "male";
