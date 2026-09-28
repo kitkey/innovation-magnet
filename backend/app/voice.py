@@ -5,6 +5,7 @@
 асинхронного API, которому нужен бакет Object Storage. Озвучка: TTS v3 utteranceSynthesis по REST, модель general, тайминги слов.
 """
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -320,10 +321,34 @@ def wav_bytes(pcm: bytes, rate: int) -> bytes:
     return buf.getvalue()
 
 
+def _tts_cache_path(text: str, voice: str, role: str, speed: float) -> Path:
+    key = hashlib.sha256(f"{voice}|{role}|{speed}|{text}".encode()).hexdigest()[:32]
+    return uploads_dir() / "tts_cache" / f"{key}.json"
+
+
 def synthesize(text: str, mood: str, gender: Gender) -> dict:
+    """Озвучка реплики. Одинаковый текст с тем же голосом, амплуа и скоростью синтезируется один раз и дальше берётся
+    с диска: переигровка, повтор входа в диалог и перезапуск сервера не стоят новых запросов к Yandex."""
     if not tts_ready():
         raise VoiceError(503, "Озвучка не настроена: нужен YANDEX_API_KEY")
     voice, role, speed = voice_for(gender, mood)
+    cached = _tts_cache_path(text, voice, role, speed)
+    if cached.is_file():
+        try:
+            return {**json.loads(cached.read_text(encoding="utf-8")), "mood": mood, "cached": True}
+        except (OSError, json.JSONDecodeError):
+            pass
+    out = _synthesize(text, voice, role, speed)
+    out["mood"] = mood
+    try:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        log.warning("TTS cache write failed: %s", exc)
+    return out
+
+
+def _synthesize(text: str, voice: str, role: str, speed: float) -> dict:
     pcm, words, wtimes, wdurations = bytearray(), [], [], []
     try:
         for part in split_text(text):
@@ -340,7 +365,7 @@ def synthesize(text: str, mood: str, gender: Gender) -> dict:
     if not pcm:
         raise VoiceError(502, "Сервис синтеза вернул пустое аудио")
     return {
-        "provider": "yandex", "voice": voice, "role": role, "mood": mood, "mime": "audio/wav",
+        "provider": "yandex", "voice": voice, "role": role, "mime": "audio/wav",
         "audio": base64.b64encode(wav_bytes(bytes(pcm), TTS_RATE)).decode(), "duration_ms": len(pcm) * 1000 // (2 * TTS_RATE),
         "words": words, "wtimes": wtimes, "wdurations": wdurations,
     }

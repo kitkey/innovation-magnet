@@ -316,3 +316,19 @@ def test_avatar_url_must_be_local(client):
     assert client.post("/api/scenarios", json=card | {"avatar_url": "/uploads/avatars/../../x.glb"}).status_code == 422
     ok = client.post("/api/scenarios", json=card | {"avatar_url": ""})
     assert ok.status_code == 200 and ok.json()["avatar_url"] is None
+
+
+def test_tts_same_phrase_synthesized_once(keys, monkeypatch):
+    calls = []
+
+    def fake_call(text, v, role, speed):
+        calls.append(text)
+        return tts_body(b"\x01\x00" * 1000, [("повтор", 0, 100)])
+
+    monkeypatch.setattr(voice, "_tts_call", fake_call)
+    first = voice.synthesize("Эта фраза прозвучит дважды.", "neutral", "female")
+    second = voice.synthesize("Эта фраза прозвучит дважды.", "neutral", "female")
+    other_mood = voice.synthesize("Эта фраза прозвучит дважды.", "angry", "female")
+    assert len(calls) == 2
+    assert second["cached"] is True and second["audio"] == first["audio"] and second["words"] == ["повтор"]
+    assert other_mood.get("cached") is None
