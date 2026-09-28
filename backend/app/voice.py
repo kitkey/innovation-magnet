@@ -32,8 +32,8 @@ Gender = Literal["female", "male"]
 
 # Голос и амплуа Yandex general по настроению собеседника. У мужских голосов «злого» амплуа нет, раздражение передаёт strict
 VOICES: dict[str, dict[str, tuple[str, str]]] = {
-    "female": {"angry": ("jane", "evil"), "disgust": ("jane", "neutral"), "happy": ("jane", "good"), "neutral": ("jane", "neutral"), "sad": ("jane", "neutral")},
-    "male": {"angry": ("kirill", "strict"), "disgust": ("kirill", "strict"), "happy": ("kirill", "good"), "neutral": ("kirill", "neutral"), "sad": ("kirill", "neutral")},
+    "female": {"angry": ("jane", "evil"), "disgust": ("jane", "neutral"), "happy": ("jane", "good"), "neutral": ("jane", "neutral"), "sad": ("jane", "neutral"), "skeptic": ("jane", "neutral")},
+    "male": {"angry": ("kirill", "strict"), "disgust": ("kirill", "strict"), "happy": ("kirill", "good"), "neutral": ("kirill", "neutral"), "sad": ("kirill", "neutral"), "skeptic": ("kirill", "strict")},
 }
 SPEED = {"angry": 1.05, "sad": 0.9}
 
@@ -87,7 +87,8 @@ def status() -> dict:
 
 
 def mood_for(card: ScenarioCard, state: OpponentState, outcome: str | None = None) -> Mood:
-    """Настроение собеседника на этом ходу: по исходу, затем по раздражению и доверию относительно порогов сложности."""
+    """Настроение собеседника на этом ходу: по исходу, затем по раздражению и доверию относительно порогов сложности.
+    Скепсис: доверие ниже нуля при раздражении ниже порога злости."""
     if outcome == "breakdown":
         return "angry"
     if outcome in ("agreement_in_zone", "agreement_out_of_zone"):
@@ -96,6 +97,8 @@ def mood_for(card: ScenarioCard, state: OpponentState, outcome: str | None = Non
         return "sad"
     if state.irritation >= max(2, math.ceil(0.6 * rules.DIFFICULTY[card.difficulty]["breakdown_irritation"])):
         return "angry"
+    if state.trust <= -1 and state.irritation >= 1:
+        return "skeptic"
     if state.trust <= -3:
         return "disgust"
     if state.trust >= 3:

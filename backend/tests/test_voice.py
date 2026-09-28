@@ -87,6 +87,8 @@ def test_mood_by_outcome_and_counters():
     assert voice.mood_for(DEADLINE, OpponentState(position=5, irritation=1)) == "neutral"
     assert voice.mood_for(DEADLINE, OpponentState(position=5, trust=-3)) == "disgust"
     assert voice.mood_for(DEADLINE, OpponentState(position=5, trust=3)) == "happy"
+    assert voice.mood_for(DEADLINE, OpponentState(position=5, trust=-1, irritation=1)) == "skeptic"
+    assert voice.mood_for(DEADLINE, OpponentState(position=5, trust=-2, irritation=0)) == "neutral"
 
 
 def test_hard_scenario_gets_angry_earlier():
@@ -108,7 +110,7 @@ def test_voice_and_role_by_mood():
 def test_turn_returns_mood(client):
     sid = start(client)
     r = client.post(f"/api/sessions/{sid}/turn", json={"message": "Что для вас важно в этом отчёте?"})
-    assert r.status_code == 200 and r.json()["mood"] in ("neutral", "happy", "angry", "sad", "disgust")
+    assert r.status_code == 200 and r.json()["mood"] in ("neutral", "happy", "angry", "sad", "disgust", "skeptic")
     assert client.get(f"/api/sessions/{sid}").json()["mood"] == r.json()["mood"]
 
 

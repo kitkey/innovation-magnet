@@ -30,7 +30,7 @@ MoveLabel = Literal[
     "conditional_trade",
     "walk_away",
 ]
-Mood = Literal["neutral", "happy", "angry", "sad", "disgust"]
+Mood = Literal["neutral", "happy", "angry", "sad", "disgust", "skeptic"]
 AVATAR_URL = r"^/(uploads/avatars|avatars)/[A-Za-z0-9_.\-]+\.glb$"
 Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "walk_away", "breakdown", "turn_limit", "user_finished"]
 

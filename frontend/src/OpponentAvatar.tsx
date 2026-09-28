@@ -5,6 +5,8 @@ import { webglAvailable } from "./avatar/speech";
 
 export type OpponentMode = "text" | "avatar";
 export const DEFAULT_AVATAR = "/avatars/mpfb.glb";
+// Сценарий без своего аватара: женский голос получает чиби, мужской — MPFB
+export const defaultAvatar = (gender: ScenarioCard["voice"]) => (gender === "female" ? "/avatars/chibi_b1.glb" : DEFAULT_AVATAR);
 const Avatar3D = lazy(() => import("./avatar/Avatar3D"));
 
 // Ошибка загрузки чанка с three.js или падение внутри 3D не должны ронять диалог
@@ -25,7 +27,7 @@ export default function OpponentAvatar({ role, mode, avatarUrl, gender, mood, sa
   return (
     <Guard onError={setFailed}>
       <Suspense fallback={<div className="avatar-slot">Загружаем 3D…</div>}>
-        <Avatar3D url={avatarUrl || DEFAULT_AVATAR} gender={gender} mood={mood} say={say} ttsReady={ttsReady} onFail={setFailed} onSpeaking={onSpeaking} />
+        <Avatar3D url={avatarUrl || defaultAvatar(gender)} gender={gender} mood={mood} say={say} ttsReady={ttsReady} onFail={setFailed} onSpeaking={onSpeaking} />
       </Suspense>
     </Guard>
   );

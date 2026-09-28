@@ -10,6 +10,7 @@ import Recorder from "./voice/Recorder";
 
 const MOOD_RU: Record<Mood, [string, string]> = {
   neutral: ["спокойное", ""], happy: ["доброжелательное", "good"], angry: ["раздражённое", "bad"], sad: ["подавленное", "warn"], disgust: ["недовольное", "warn"],
+  skeptic: ["скептичное", "warn"],
 };
 
 function Segs({ n, of }: { n: number; of: number }) {

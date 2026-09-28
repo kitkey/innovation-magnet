@@ -73,7 +73,7 @@ export type TurnOut = {
   hints?: HintOut[];
 };
 
-export type Mood = "neutral" | "happy" | "angry" | "sad" | "disgust";
+export type Mood = "neutral" | "happy" | "angry" | "sad" | "disgust" | "skeptic";
 export type VoiceTurnOut = TurnOut & { recognized: string; audio_url: string | null };
 export type VoiceStatus = { stt: boolean; tts: boolean; provider: string | null; ffmpeg: boolean; max_seconds: number; avatar_max_mb: number };
 export type Speech = { audio: string | null; mime: string; words: string[]; wtimes: number[]; wdurations: number[]; mood: Mood; voice?: string; role?: string };

@@ -5,6 +5,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { api, Mood, ScenarioCard, Speech } from "../api";
 import { LipsyncRu } from "./lipsync-ru";
 import { b64ToArrayBuffer, estimateTimings } from "./speech";
+import { cameraFor, EXTRA_MOODS } from "./profiles";
 
 // TalkingHead 1.7 из npm создаёт GLTFLoader без декодера Meshopt; подключаем его, чтобы грузить сжатые модели (наша весит 3 МБ вместо 37)
 const parse = GLTFLoader.prototype.parse;
@@ -33,12 +34,13 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail, onS
     let alive = true;
     let h: TalkingHead;
     try {
-      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "upper", cameraDistance: -1, cameraY: -0.1, cameraRotateEnable: false, avatarMood: mood, modelFPS: 30 });
+      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "upper", ...cameraFor(url), cameraRotateEnable: false, avatarMood: "neutral", modelFPS: 30 });
+      for (const [name, m] of Object.entries(EXTRA_MOODS)) h.animMoods[name] = { ...h.animMoods[m.base], baseline: m.baseline };
     } catch (e) { onFail(`3D не запустился: ${(e as Error).message}`); return; }
     h.lipsync.ru = new LipsyncRu();
     head.current = h;
-    h.showAvatar({ url, body: gender === "male" ? "M" : "F", avatarMood: mood, lipsyncLang: "ru" }, (ev) => { if (ev.lengthComputable) setProgress(Math.round((100 * ev.loaded) / ev.total)); })
-      .then(() => { if (alive) setReady(true); })
+    h.showAvatar({ url, body: gender === "male" ? "M" : "F", avatarMood: "neutral", lipsyncLang: "ru" }, (ev) => { if (ev.lengthComputable) setProgress(Math.round((100 * ev.loaded) / ev.total)); })
+      .then(() => { if (!alive) return; try { h.setMood(mood); } catch { /* неизвестное настроение */ } setReady(true); })
       .catch((e) => { if (alive) onFail(`3D-модель не загрузилась: ${e?.message ?? e}`); });
     return () => { alive = false; setReady(false); onSpeaking?.(false); head.current = null; try { h.dispose(); } catch { /* уже остановлен */ } };
   }, [url, gender]);
