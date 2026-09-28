@@ -79,7 +79,8 @@ def test_guest_mode_unchanged(client):
     sid = play(client, {})
     with SessionLocal() as db:
         assert db.get(SessionRow, sid).user_id is None
-    assert sid in [s["id"] for s in client.get("/api/sessions").json()]
+    assert sid not in [s["id"] for s in client.get("/api/sessions").json()]
+    assert [s["id"] for s in client.get("/api/sessions", params={"ids": f"{sid},nope"}).json()] == [sid]
     assert client.get(f"/api/sessions/{sid}/result").json()["judge_source"] == "rules"
     assert client.get(f"/api/sessions/{sid}", headers={"Authorization": "Bearer stale"}).status_code == 200
 
@@ -181,3 +182,62 @@ def test_migration_adds_columns_to_old_schema():
     with eng.connect() as c:
         assert c.execute(text("SELECT id, user_id FROM sessions")).all() == [("x1", None)]
     eng.dispose()
+
+
+def test_member_roles_remove_and_leave(client):
+    ha, admin = register(client, "Админ")
+    hm, member = register(client, "Сотрудник")
+    hx, stranger = register(client, "Чужой")
+    code = client.post("/api/orgs", json={"name": "Роли"}, headers=ha).json()["invite_code"]
+    client.post("/api/orgs/join", json={"code": code}, headers=hm)
+    client.post("/api/orgs", json={"name": "Другая"}, headers=hx)
+    url = f"/api/orgs/me/members/{member['id']}"
+    assert client.patch(url, json={"role": "org_admin"}, headers=hm).status_code == 403
+    assert client.patch(url, json={"role": "org_admin"}, headers=hx).status_code == 404
+    assert client.patch(url, json={"role": "owner"}, headers=ha).status_code == 422
+    assert client.patch(url, json={"role": "org_admin"}, headers=ha).json()["role"] == "org_admin"
+    assert client.get("/api/orgs/me/stats", headers=hm).status_code == 200
+    assert client.patch(f"/api/orgs/me/members/{admin['id']}", json={"role": "member"}, headers=hm).json()["role"] == "member"
+    assert client.patch(url, json={"role": "member"}, headers=hm).status_code == 409
+    assert client.post("/api/orgs/me/leave", headers=hm).status_code == 409
+    assert client.delete(url, headers=hm).status_code == 409
+    assert client.delete(f"/api/orgs/me/members/{stranger['id']}", headers=hm).status_code == 404
+    assert client.delete(f"/api/orgs/me/members/{admin['id']}", headers=hm).json() == {"ok": True}
+    me = client.get("/api/auth/me", headers=ha).json()
+    assert me["org_id"] is None and me["role"] == "member"
+    assert client.post("/api/orgs/me/leave", headers=hm).json()["org_id"] is None
+    assert client.post("/api/orgs/me/leave", headers=hm).status_code == 404
+    assert client.post("/api/orgs/me/leave").status_code == 401
+
+
+def test_open_scenarios_belong_to_author(client):
+    ha, _ = register(client)
+    hm, _ = register(client)
+    hb, _ = register(client)
+    code = client.post("/api/orgs", json={"name": "Авторы А"}, headers=ha).json()["invite_code"]
+    client.post("/api/orgs/join", json={"code": code}, headers=hm)
+    client.post("/api/orgs", json={"name": "Авторы Б"}, headers=hb)
+    card = SEEDS["split-with-colleague"].model_dump()
+    seed = "deadline-with-manager"
+    for h in ({}, hm, ha, hb):
+        assert client.put(f"/api/scenarios/{seed}", json=SEEDS[seed].model_dump() | {"name": "Взлом"}, headers=h).status_code == 403
+    assert next(s for s in client.get("/api/scenarios").json() if s["id"] == seed)["builtin"] is True
+
+    own = client.post("/api/scenarios", json=card, headers=hm).json()
+    assert own["can_edit"] and own["edit_key"] is None
+    assert client.put(f"/api/scenarios/{own['id']}", json=card | {"name": "Моё"}, headers=hm).status_code == 200
+    assert client.put(f"/api/scenarios/{own['id']}", json=card | {"name": "Админ"}, headers=ha).status_code == 200
+    assert client.put(f"/api/scenarios/{own['id']}", json=card, headers={}).status_code == 403
+    assert client.put(f"/api/scenarios/{own['id']}", json=card | {"locked_by_org": True}, headers=hb).status_code == 403
+    assert client.put(f"/api/scenarios/{own['id']}", json=card | {"locked_by_org": True}, headers=hm).status_code == 403
+    listed = {s["id"]: s for s in client.get("/api/scenarios", headers=hb).json()}
+    assert listed[own["id"]]["can_edit"] is False and listed[seed]["can_edit"] is False
+
+    guest = client.post("/api/scenarios", json=card).json()
+    key = guest["edit_key"]
+    assert key and not client.get("/api/scenarios").json()[-1].get("edit_key")
+    assert client.put(f"/api/scenarios/{guest['id']}", json=card).status_code == 403
+    assert client.put(f"/api/scenarios/{guest['id']}", json=card, headers={"X-Edit-Key": "wrong"}).status_code == 403
+    assert client.put(f"/api/scenarios/{guest['id']}", json=card, headers=hb).status_code == 403
+    assert client.put(f"/api/scenarios/{guest['id']}", json=card | {"name": "Гость"}, headers={"X-Edit-Key": key}).json()["name"] == "Гость"
+    assert client.put(f"/api/scenarios/{guest['id']}", json=card | {"locked_by_org": True}, headers={"X-Edit-Key": key}).status_code == 403

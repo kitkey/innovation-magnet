@@ -2,6 +2,8 @@
 import hashlib
 import hmac
 import secrets
+import threading
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -14,6 +16,8 @@ from .db import AuthTokenRow, OrgRow, SessionRow, UserRow, get_db
 router = APIRouter(prefix="/api")
 
 PBKDF2_ROUNDS = 200_000
+WRITE_LOCK = threading.Lock()
+"""Проверка прав и запись членства/сценариев одной критической секцией: без неё два одновременных запроса проходят проверку оба."""
 
 
 def hash_password(password: str) -> str:
@@ -77,6 +81,10 @@ class OrgIn(BaseModel):
 
 class JoinIn(BaseModel):
     code: str = Field(min_length=4, max_length=16)
+
+
+class RoleIn(BaseModel):
+    role: Literal["member", "org_admin"]
 
 
 def user_out(db, u: UserRow) -> dict:
@@ -153,26 +161,30 @@ def org_out(org: OrgRow, user: UserRow) -> dict:
 
 @router.post("/orgs")
 def create_org(payload: OrgIn, user: UserRow = Depends(require_user), db=Depends(get_db)):
-    if user.org_id:
-        raise HTTPException(409, "Вы уже состоите в организации")
-    org = OrgRow(id=uuid4().hex, name=payload.name.strip(), invite_code=_new_code(db))
-    db.add(org)
-    db.flush()
-    user.org_id, user.role = org.id, "org_admin"
-    db.commit()
+    with WRITE_LOCK:
+        db.refresh(user)
+        if user.org_id:
+            raise HTTPException(409, "Вы уже состоите в организации")
+        org = OrgRow(id=uuid4().hex, name=payload.name.strip(), invite_code=_new_code(db))
+        db.add(org)
+        db.flush()
+        user.org_id, user.role = org.id, "org_admin"
+        db.commit()
     return org_out(org, user)
 
 
 @router.post("/orgs/join")
 def join_org(payload: JoinIn, user: UserRow = Depends(require_user), db=Depends(get_db)):
-    org = db.query(OrgRow).filter_by(invite_code=payload.code.strip().upper()).first()
-    if org is None:
-        raise HTTPException(404, "Код приглашения не найден")
-    if user.org_id and user.org_id != org.id:
-        raise HTTPException(409, "Вы уже состоите в другой организации")
-    if user.org_id != org.id:
-        user.org_id, user.role = org.id, "member"
-        db.commit()
+    with WRITE_LOCK:
+        db.refresh(user)
+        org = db.query(OrgRow).filter_by(invite_code=payload.code.strip().upper()).first()
+        if org is None:
+            raise HTTPException(404, "Код приглашения не найден")
+        if user.org_id and user.org_id != org.id:
+            raise HTTPException(409, "Вы уже состоите в другой организации")
+        if user.org_id != org.id:
+            user.org_id, user.role = org.id, "member"
+            db.commit()
     return org_out(org, user)
 
 
@@ -189,6 +201,59 @@ def new_invite(user: UserRow = Depends(require_org_admin), db=Depends(get_db)):
     org.invite_code = _new_code(db)
     db.commit()
     return org_out(org, user)
+
+
+def _member(db, admin: UserRow, user_id: str) -> UserRow:
+    m = db.get(UserRow, user_id)
+    if m is None or m.org_id != admin.org_id:
+        raise HTTPException(404, "Участник не найден")
+    return m
+
+
+def _admin_count(db, org_id: str) -> int:
+    return db.query(UserRow).filter_by(org_id=org_id, role="org_admin").count()
+
+
+def member_out(m: UserRow) -> dict:
+    return {"id": m.id, "login": m.login, "display_name": m.display_name, "role": m.role}
+
+
+@router.patch("/orgs/me/members/{user_id}")
+def set_member_role(user_id: str, payload: RoleIn, admin: UserRow = Depends(require_org_admin), db=Depends(get_db)):
+    """Администратор назначает или снимает администратора. Последнего администратора снять нельзя, иначе кабинет останется без хозяина."""
+    with WRITE_LOCK:
+        m = _member(db, admin, user_id)
+        if m.role == "org_admin" and payload.role == "member" and _admin_count(db, m.org_id) <= 1:
+            raise HTTPException(409, "В организации должен остаться хотя бы один администратор")
+        m.role = payload.role
+        db.commit()
+    return member_out(m)
+
+
+@router.delete("/orgs/me/members/{user_id}")
+def remove_member(user_id: str, admin: UserRow = Depends(require_org_admin), db=Depends(get_db)):
+    with WRITE_LOCK:
+        m = _member(db, admin, user_id)
+        if m.id == admin.id:
+            raise HTTPException(409, "Себя удалить нельзя: выйдите из организации в профиле")
+        m.org_id, m.role = None, "member"
+        db.commit()
+    return {"ok": True}
+
+
+@router.post("/orgs/me/leave")
+def leave_org(user: UserRow = Depends(require_user), db=Depends(get_db)):
+    """Выход из организации. Единственный администратор при других участниках сначала назначает преемника."""
+    with WRITE_LOCK:
+        db.refresh(user)
+        if not user.org_id:
+            raise HTTPException(404, "Вы не состоите в организации")
+        others = db.query(UserRow).filter(UserRow.org_id == user.org_id, UserRow.id != user.id).count()
+        if user.role == "org_admin" and others and _admin_count(db, user.org_id) <= 1:
+            raise HTTPException(409, "Вы единственный администратор: сначала назначьте администратором другого участника")
+        user.org_id, user.role = None, "member"
+        db.commit()
+    return user_out(db, user)
 
 
 def _period(period: str) -> str:

@@ -24,7 +24,7 @@ export type ScenarioCard = {
   avatar_url: string | null;
 };
 
-export type Scenario = ScenarioCard & { id: string; org_id: string | null };
+export type Scenario = ScenarioCard & { id: string; org_id: string | null; builtin: boolean; can_edit: boolean; edit_key?: string | null };
 
 export type User = { id: string; login: string; display_name: string; role: "member" | "org_admin"; org_id: string | null; org_name: string | null; public_in_leaderboard: boolean };
 export type Org = { id: string; name: string; invite_code: string | null };
@@ -88,11 +88,30 @@ export const store = {
 
 export const AUTH_KEY = "arena.authToken";
 export const MODE_KEY = "arena.opponentMode";
+const EDIT_KEYS = "arena.scenarioKeys";
+const GUEST_SESSIONS = "arena.guestSessions";
+
+function readJson<T>(k: string, fallback: T): T {
+  try { return JSON.parse(store.get(k) ?? "") as T; } catch { return fallback; }
+}
+
+/** Ключи правки сценариев, созданных без входа: сервер выдаёт ключ один раз, браузер его хранит. */
+export const editKeys = {
+  all: () => readJson<Record<string, string>>(EDIT_KEYS, {}),
+  add: (id: string, key: string) => store.set(EDIT_KEYS, JSON.stringify({ ...editKeys.all(), [id]: key })),
+};
+
+/** Гостевые сессии: общего списка на сервере нет, история гостя — это id, которые помнит его браузер. */
+const guestSessions = {
+  all: () => readJson<string[]>(GUEST_SESSIONS, []),
+  add: (id: string) => { if (!store.get(AUTH_KEY)) store.set(GUEST_SESSIONS, JSON.stringify([id, ...guestSessions.all().filter((x) => x !== id)].slice(0, 50))); },
+};
 
 async function call<T>(path: string, init?: RequestInit, json = true): Promise<T> {
   const token = store.get("arena.adminToken");
   const auth = store.get(AUTH_KEY);
-  const r = await fetch(path, { headers: { ...(json ? { "Content-Type": "application/json" } : {}), ...(token ? { "X-Admin-Token": token } : {}), ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, ...init });
+  const headers = { ...(json ? { "Content-Type": "application/json" } : {}), ...(token ? { "X-Admin-Token": token } : {}), ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...(init?.headers as Record<string, string> | undefined) };
+  const r = await fetch(path, { ...init, headers });
   if (!r.ok) {
     const detail = (await r.json().catch(() => ({}))).detail;
     throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail ?? r.statusText);
@@ -102,16 +121,31 @@ async function call<T>(path: string, init?: RequestInit, json = true): Promise<T
 
 export const api = {
   scenarios: () => call<Scenario[]>("/api/scenarios"),
-  createScenario: (card: ScenarioCard) => call<Scenario>("/api/scenarios", { method: "POST", body: JSON.stringify(card) }),
-  updateScenario: (id: string, card: ScenarioCard) => call<Scenario>(`/api/scenarios/${id}`, { method: "PUT", body: JSON.stringify(card) }),
+  createScenario: async (card: ScenarioCard) => {
+    const s = await call<Scenario>("/api/scenarios", { method: "POST", body: JSON.stringify(card) });
+    if (s.edit_key) editKeys.add(s.id, s.edit_key);
+    return s;
+  },
+  updateScenario: (id: string, card: ScenarioCard) => {
+    const key = editKeys.all()[id];
+    return call<Scenario>(`/api/scenarios/${id}`, { method: "PUT", body: JSON.stringify(card), headers: key ? { "X-Edit-Key": key } : {} });
+  },
   generate: (description: string) => call<ScenarioCard>("/api/scenarios/generate", { method: "POST", body: JSON.stringify({ description }) }),
-  start: (id: string) => call<{ session_id: string; opening: string; max_turns: number }>(`/api/sessions?scenario_id=${id}`, { method: "POST" }),
+  start: async (id: string) => {
+    const r = await call<{ session_id: string; opening: string; max_turns: number }>(`/api/sessions?scenario_id=${id}`, { method: "POST" });
+    guestSessions.add(r.session_id);
+    return r;
+  },
   turn: (sid: string, message: string) => call<TurnOut>(`/api/sessions/${sid}/turn`, { method: "POST", body: JSON.stringify({ message }) }),
   finish: (sid: string) => call<{ ok: boolean }>(`/api/sessions/${sid}/finish`, { method: "POST" }),
   result: (sid: string) => call<SessionResult>(`/api/sessions/${sid}/result`),
   session: (sid: string) => call<SessionView>(`/api/sessions/${sid}`),
-  rewind: (sid: string, turn: number) => call<SessionView>(`/api/sessions/${sid}/rewind`, { method: "POST", body: JSON.stringify({ turn }) }),
-  history: () => call<{ id: string; scenario: string; status: string; outcome: string | null; turns: number }[]>("/api/sessions"),
+  rewind: async (sid: string, turn: number) => {
+    const v = await call<SessionView>(`/api/sessions/${sid}/rewind`, { method: "POST", body: JSON.stringify({ turn }) });
+    guestSessions.add(v.id);
+    return v;
+  },
+  history: () => call<{ id: string; scenario: string; status: string; outcome: string | null; turns: number }[]>(store.get(AUTH_KEY) ? "/api/sessions" : `/api/sessions?ids=${guestSessions.all().join(",")}`),
   register: (login: string, password: string, display_name: string) => call<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: JSON.stringify({ login, password, display_name }) }),
   login: (login: string, password: string) => call<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   logout: () => call<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
@@ -120,6 +154,9 @@ export const api = {
   createOrg: (name: string) => call<Org>("/api/orgs", { method: "POST", body: JSON.stringify({ name }) }),
   joinOrg: (code: string) => call<Org>("/api/orgs/join", { method: "POST", body: JSON.stringify({ code }) }),
   newInvite: () => call<Org>("/api/orgs/me/invite", { method: "POST" }),
+  setMemberRole: (id: string, role: User["role"]) => call<{ id: string; role: User["role"] }>(`/api/orgs/me/members/${id}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  removeMember: (id: string) => call<{ ok: boolean }>(`/api/orgs/me/members/${id}`, { method: "DELETE" }),
+  leaveOrg: () => call<User>("/api/orgs/me/leave", { method: "POST" }),
   orgStats: (period: Period) => call<{ org: Org; period: Period; members: MemberStats[] }>(`/api/orgs/me/stats?period=${period}`),
   voiceTurn: (sid: string, audio: Blob, name: string) => { const f = new FormData(); f.append("audio", audio, name); return call<VoiceTurnOut>(`/api/sessions/${sid}/voice`, { method: "POST", body: f }, false); },
   voiceStatus: () => call<VoiceStatus>("/api/voice/status"),

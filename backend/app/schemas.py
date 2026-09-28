@@ -81,6 +81,9 @@ class ScenarioCard(BaseModel):
 class Scenario(ScenarioCard):
     id: str
     org_id: str | None = None
+    builtin: bool = False
+    can_edit: bool = False
+    edit_key: str | None = Field(default=None, description="ключ правки сценария, созданного без входа; выдаётся один раз")
 
 
 class ScenarioBrief(BaseModel):

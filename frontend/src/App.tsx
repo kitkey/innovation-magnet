@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile, UserIcon } from "./account";
-import { api, AUTH_KEY, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, User, VoiceStatus } from "./api";
+import { api, AUTH_KEY, editKeys, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, User, VoiceStatus } from "./api";
 import type { Say } from "./avatar/Avatar3D";
 import { MicIcon } from "./icons";
 import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
 import Recorder from "./voice/Recorder";
 
-type View = { name: "list" } | { name: "setup"; scenario?: Scenario } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" }
+type View = { name: "list" } | { name: "setup"; scenario?: Scenario; copy?: boolean } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" }
   | { name: "auth" } | { name: "profile" } | { name: "org" } | { name: "leaderboard" };
 type Go = (v: View) => void;
 
@@ -62,14 +62,14 @@ export default function App() {
         </nav>
       </header>
       {view.name === "list" && <List key={user?.id ?? "guest"} user={user} go={setView} />}
-      {view.name === "setup" && <Setup scenario={view.scenario} go={setView} />}
+      {view.name === "setup" && <Setup key={`${view.scenario?.id ?? "new"}-${view.copy ? "copy" : "edit"}`} scenario={view.scenario} copy={view.copy} go={setView} />}
       {view.name === "dialog" && <Dialog key={view.sid} sid={view.sid} go={setView} />}
       {view.name === "result" && <Result key={view.sid} sid={view.sid} go={setView} />}
       {view.name === "history" && <History go={setView} />}
       {view.name === "test" && <EntryTest go={setView} />}
       {view.name === "auth" && <Auth onUser={onUser} />}
       {view.name === "profile" && (user ? <Profile user={user} onUser={(u) => (u ? setUser(u) : onUser(null))} /> : <Auth onUser={onUser} />)}
-      {view.name === "org" && (user?.role === "org_admin" ? <OrgCabinet key={user.org_id} /> : <main><p className="muted">Кабинет доступен администратору организации.</p></main>)}
+      {view.name === "org" && (user?.role === "org_admin" ? <OrgCabinet key={user.org_id} user={user} onUser={setUser} /> : <main><p className="muted">Кабинет доступен администратору организации.</p></main>)}
       {view.name === "leaderboard" && <Leaderboard key={user?.id ?? "guest"} user={user} />}
     </div>
   );
@@ -83,8 +83,8 @@ function List({ user, go }: { user: User | null; go: Go }) {
   const [items, setItems] = useState<Scenario[]>([]);
   const [active, setActive] = useState<SessionView | null>(null);
   const [err, setErr] = useState("");
-  const admin = !!store.get("arena.adminToken");
-  const canEdit = (s: Scenario) => !s.locked_by_org || admin || (user?.role === "org_admin" && !!s.org_id && s.org_id === user.org_id);
+  const keys = editKeys.all();
+  const canEdit = (s: Scenario) => s.can_edit || !!keys[s.id];
   useEffect(() => {
     api.scenarios().then(setItems).catch((e) => setErr(`Сценарии не загрузились: ${e.message}`));
     const sid = store.get(ACTIVE_KEY);
@@ -109,7 +109,10 @@ function List({ user, go }: { user: User | null; go: Go }) {
           <p>{s.topic}</p>
           <div className="row">
             <button className="primary" onClick={() => startScenario(s.id, go, setErr)}>Начать</button>
-            {canEdit(s) && <button onClick={() => go({ name: "setup", scenario: s })}>Настроить</button>}
+            {canEdit(s)
+              ? <button onClick={() => go({ name: "setup", scenario: s })}>Настроить</button>
+              : <button title={s.builtin ? "Встроенный сценарий не меняется, настройки сохранятся в вашу копию" : "Сценарий чужой, настройки сохранятся в вашу копию"}
+                onClick={() => go({ name: "setup", scenario: s, copy: true })}>Сделать копию</button>}
           </div>
         </article>
       ))}
@@ -145,8 +148,8 @@ function AvatarField({ value, onChange }: { value: string | null; onChange: (url
 
 function lines(v: string) { return v.split("\n").map((x) => x.trim()).filter(Boolean); }
 
-function Setup({ scenario, go }: { scenario?: Scenario; go: Go }) {
-  const [card, setCard] = useState<ScenarioCard>(scenario ?? EMPTY);
+function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go: Go }) {
+  const [card, setCard] = useState<ScenarioCard>(scenario ? (copy ? { ...scenario, name: `${scenario.name} (копия)`, locked_by_org: false } : scenario) : EMPTY);
   const [brief, setBrief] = useState("");
   const [err, setErr] = useState("");
   const [token, setToken] = useState(store.get("arena.adminToken") ?? "");
@@ -156,7 +159,7 @@ function Setup({ scenario, go }: { scenario?: Scenario; go: Go }) {
   const save = async () => {
     setErr("");
     try {
-      const s = scenario ? await api.updateScenario(scenario.id, card) : await api.createScenario(card);
+      const s = scenario && !copy ? await api.updateScenario(scenario.id, card) : await api.createScenario(card);
       await startScenario(s.id, go, setErr);
     } catch (e) { setErr((e as Error).message); }
   };

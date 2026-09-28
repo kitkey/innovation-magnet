@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import mimetypes
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -9,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from . import llm, service, voice
-from .accounts import current_user, router as accounts_router
+from .accounts import WRITE_LOCK, current_user, router as accounts_router
 from .config import settings
 from .db import ScenarioRow, SessionLocal, SessionRow, UserRow, get_db, init_db
 from .schemas import RewindIn, Scenario, ScenarioBrief, ScenarioCard, SessionResult, TtsIn, TurnIn, TurnOut, VoiceTurnOut
@@ -43,32 +46,45 @@ def _is_admin(token: str | None) -> bool:
     return bool(settings.admin_token) and token == settings.admin_token
 
 
-def _is_org_admin(user: UserRow | None) -> bool:
-    return user is not None and user.role == "org_admin" and bool(user.org_id)
+def _is_org_admin(user: UserRow | None, org_id: str | None = None) -> bool:
+    return user is not None and user.role == "org_admin" and bool(user.org_id) and (org_id is None or user.org_id == org_id)
+
+
+def _key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _can_edit(row: ScenarioRow, token: str | None, user: UserRow | None, edit_key: str | None) -> bool:
+    """Встроенные сценарии правит только владелец запасного токена, остальные сохраняют копию.
+    Зафиксированный — администратор его организации. Открытый — автор, администратор его организации или гость с ключом правки."""
+    if _is_admin(token):
+        return True
+    if row.id in SEEDS:
+        return False
+    if row.card.get("locked_by_org"):
+        return _is_org_admin(user, row.org_id)
+    if user is not None and row.owner_id == user.id:
+        return True
+    if row.org_id and _is_org_admin(user, row.org_id):
+        return True
+    return row.owner_id is None and bool(row.edit_key) and bool(edit_key) and hmac.compare_digest(row.edit_key, _key_hash(edit_key))
 
 
 def _check_lock_rights(card: ScenarioCard, token: str | None, user: UserRow | None) -> None:
-    if card.locked_by_org and settings.admin_token and not _is_admin(token) and not _is_org_admin(user):
-        raise HTTPException(403, "Фиксировать сценарий может только администратор")
+    if card.locked_by_org and not _is_admin(token) and not _is_org_admin(user):
+        raise HTTPException(403, "Фиксировать сценарий может только администратор организации")
 
 
-def _owner_org(card: ScenarioCard, user: UserRow | None, current: str | None = None) -> str | None:
-    """Зафиксированный сценарий принадлежит организации того, кто его зафиксировал; запасной admin-токен владельца не меняет."""
-    if not card.locked_by_org:
-        return None
-    return current or (user.org_id if _is_org_admin(user) else None)
-
-
-def _out(row: ScenarioRow) -> Scenario:
-    return Scenario(id=row.id, org_id=row.org_id, **row.card)
+def _out(row: ScenarioRow, token: str | None = None, user: UserRow | None = None, edit_key: str | None = None) -> Scenario:
+    return Scenario(id=row.id, org_id=row.org_id, builtin=row.id in SEEDS, can_edit=_can_edit(row, token, user, edit_key), **row.card)
 
 
 @app.get("/api/scenarios", response_model=list[Scenario])
-def list_scenarios(db=Depends(get_db)):
+def list_scenarios(db=Depends(get_db), x_admin_token: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
     out = []
     for r in db.query(ScenarioRow).order_by(ScenarioRow.created_at):
         try:
-            out.append(_out(r))
+            out.append(_out(r, x_admin_token, user))
         except ValidationError:
             continue
     return out
@@ -77,25 +93,34 @@ def list_scenarios(db=Depends(get_db)):
 @app.post("/api/scenarios", response_model=Scenario)
 def create_scenario(card: ScenarioCard, db=Depends(get_db), x_admin_token: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
     _check_lock_rights(card, x_admin_token, user)
-    row = ScenarioRow(id=uuid4().hex[:12], card=card.model_dump(), org_id=_owner_org(card, user))
+    key = None if user else secrets.token_urlsafe(24)
+    row = ScenarioRow(id=uuid4().hex[:12], card=card.model_dump(), org_id=user.org_id if user else None,
+                      owner_id=user.id if user else None, edit_key=_key_hash(key) if key else None)
     db.add(row)
     db.commit()
-    return _out(row)
+    return _out(row, x_admin_token, user, key).model_copy(update={"edit_key": key})
 
 
 @app.put("/api/scenarios/{scenario_id}", response_model=Scenario)
-def update_scenario(scenario_id: str, card: ScenarioCard, db=Depends(get_db), x_admin_token: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
-    row = db.get(ScenarioRow, scenario_id)
-    if row is None:
-        raise HTTPException(404, "Сценарий не найден")
-    own_admin = _is_org_admin(user) and row.org_id is not None and row.org_id == user.org_id
-    if row.card.get("locked_by_org") and not _is_admin(x_admin_token) and not own_admin:
-        raise HTTPException(403, "Модуль зафиксирован организацией, менять его может только администратор")
-    _check_lock_rights(card, x_admin_token, user)
-    row.card = card.model_dump()
-    row.org_id = _owner_org(card, user, row.org_id)
-    db.commit()
-    return _out(row)
+def update_scenario(scenario_id: str, card: ScenarioCard, db=Depends(get_db), x_admin_token: str | None = Header(default=None),
+                    x_edit_key: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
+    with WRITE_LOCK:
+        row = db.get(ScenarioRow, scenario_id)
+        if row is None:
+            raise HTTPException(404, "Сценарий не найден")
+        db.refresh(row)
+        if not _can_edit(row, x_admin_token, user, x_edit_key):
+            if row.id in SEEDS:
+                raise HTTPException(403, "Встроенный сценарий не меняется: сохраните свою копию")
+            if row.card.get("locked_by_org"):
+                raise HTTPException(403, "Модуль зафиксирован организацией, менять его может только её администратор")
+            raise HTTPException(403, "Менять сценарий может только автор или администратор его организации")
+        _check_lock_rights(card, x_admin_token, user)
+        if card.locked_by_org and not row.card.get("locked_by_org") and _is_org_admin(user):
+            row.org_id = user.org_id
+        row.card = card.model_dump()
+        db.commit()
+        return _out(row, x_admin_token, user, x_edit_key)
 
 
 @app.post("/api/scenarios/generate", response_model=ScenarioCard)
@@ -211,9 +236,13 @@ def session_result(session_id: str, db=Depends(get_db), user: UserRow | None = D
 
 
 @app.get("/api/sessions")
-def list_sessions(db=Depends(get_db), user: UserRow | None = Depends(current_user)):
-    """Вошедший видит свои сессии, гость — только гостевые."""
-    q = db.query(SessionRow).filter(SessionRow.user_id == user.id) if user else db.query(SessionRow).filter(SessionRow.user_id.is_(None))
+def list_sessions(ids: str = "", db=Depends(get_db), user: UserRow | None = Depends(current_user)):
+    """Вошедший видит свои сессии. Общего списка гостевых сессий нет: гость получает только те, id которых знает сам (браузер хранит их локально)."""
+    if user:
+        q = db.query(SessionRow).filter(SessionRow.user_id == user.id)
+    else:
+        known = [i for i in ids.split(",") if i][:50]
+        q = db.query(SessionRow).filter(SessionRow.user_id.is_(None), SessionRow.id.in_(known))
     rows = q.order_by(SessionRow.created_at.desc()).limit(50)
     return [{"id": r.id, "scenario": r.card["name"], "status": r.status, "outcome": r.outcome, "turns": r.turn} for r in rows]
 

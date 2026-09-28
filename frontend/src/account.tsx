@@ -79,7 +79,12 @@ export function Profile({ user, onUser }: { user: User; onUser: SetUser }) {
       <p className="small muted">В режиме «3D и голос» собеседник отвечает голосом и мимикой, текст ответа всё равно остаётся в чате. Переключается и в самом диалоге.</p>
       <section className="panel">
         <h3>Организация</h3>
-        {user.org_id ? <p>{user.org_name} · {ROLE_RU[user.role]}</p> : (
+        {user.org_id ? (
+          <>
+            <p>{user.org_name} · {ROLE_RU[user.role]}</p>
+            <button onClick={() => { if (confirm(`Выйти из организации «${user.org_name}»? Вернуться можно по коду приглашения.`)) run(() => api.leaveOrg(), "Вы вышли из организации"); }}>Выйти из организации</button>
+          </>
+        ) : (
           <>
             <label>Код приглашения<div className="row"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Например, 3F9A1C0B" />
               <button disabled={!code.trim()} onClick={() => run(() => api.joinOrg(code), "Вы вступили в организацию")}>Вступить</button></div></label>
@@ -107,11 +112,21 @@ function leaders(members: MemberStats[]) {
   return best;
 }
 
-export function OrgCabinet() {
+export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => void }) {
   const [period, setPeriod] = useState<Period>("month");
   const [data, setData] = useState<{ org: Org; members: MemberStats[] } | null>(null);
   const [err, setErr] = useState("");
-  useEffect(() => { setErr(""); api.orgStats(period).then(setData).catch((e) => setErr(`Кабинет не загрузился: ${e.message}`)); }, [period]);
+  const [busy, setBusy] = useState("");
+  const load = () => api.orgStats(period).then(setData).catch((e) => setErr(`Кабинет не загрузился: ${e.message}`));
+  useEffect(() => { setErr(""); load(); }, [period]);
+  const act = async (id: string, f: () => Promise<unknown>) => {
+    setErr(""); setBusy(id);
+    try {
+      await f();
+      if (id === user.id) { onUser(await api.me()); return; }
+      await load();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
+  };
   const regen = async () => { try { const org = await api.newInvite(); if (data) setData({ ...data, org }); } catch (e) { setErr((e as Error).message); } };
   if (!data) return <main>{err ? <p className="error">{err}</p> : <p>Загрузка…</p>}</main>;
   const best = leaders(data.members);
@@ -136,12 +151,20 @@ export function OrgCabinet() {
       )}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Участник</th><th>Сессий</th><th>Минут</th><th>В зоне</th><th>Рейтинг</th><th>Средние оценки по осям</th></tr></thead>
+          <thead><tr><th>Участник</th><th>Сессий</th><th>Минут</th><th>В зоне</th><th>Рейтинг</th><th>Средние оценки по осям</th><th>Права</th></tr></thead>
           <tbody>{data.members.map((m) => (
             <tr key={m.id}>
               <td>{m.display_name}<div className="small muted">{m.login}{m.role === "org_admin" ? " · администратор" : ""}</div></td>
               <td>{m.sessions}</td><td>{m.training_minutes}</td><td>{pct(m.in_zone_share)}</td><td>{m.rating ?? "—"}</td>
               <td className="small">{Object.entries(m.axes).map(([k, v]) => <div key={k}>{k}: {v}</div>)}{!Object.keys(m.axes).length && "—"}</td>
+              <td className="small">
+                <div className="row">
+                  {m.role === "org_admin"
+                    ? <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "member"))}>Снять администратора</button>
+                    : <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "org_admin"))}>Сделать администратором</button>}
+                  {m.id !== user.id && <button disabled={!!busy} onClick={() => { if (confirm(`Удалить ${m.display_name} из организации? История сессий останется в профиле участника.`)) act(m.id, () => api.removeMember(m.id)); }}>Удалить</button>}
+                </div>
+              </td>
             </tr>
           ))}</tbody>
         </table>

@@ -30,6 +30,8 @@ class ScenarioRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     card: Mapped[dict] = mapped_column(JSON)
     org_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    edit_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -88,7 +90,7 @@ class TurnRow(Base):
     session: Mapped[SessionRow] = relationship(back_populates="turns")
 
 
-ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)"}, "scenarios": {"org_id": "VARCHAR(32)"}, "turns": {"audio_url": "VARCHAR(200)"}}
+ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)"}, "scenarios": {"org_id": "VARCHAR(32)", "owner_id": "VARCHAR(32)", "edit_key": "VARCHAR(64)"}, "turns": {"audio_url": "VARCHAR(200)"}}
 
 
 def init_db(bind=None) -> None:
