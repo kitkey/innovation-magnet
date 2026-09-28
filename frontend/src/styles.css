@@ -93,6 +93,24 @@ legend { font-weight: 800; font-size: 14px; padding: 0 6px; }
 .page > main.narrow { max-width: 440px; }
 .gen { display: grid; gap: 10px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); }
 .gen button { justify-self: start; }
+.gen-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.gen-h > label { font-size: 15px; font-weight: 700; color: var(--ink); }
+.gen .helpbtn { color: var(--accent); font-weight: 700; font-size: 14px; margin-right: -10px; }
+.gen-sub { margin: -6px 0 0; }
+.gen-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.gen textarea { min-height: 110px; }
+.flabel { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.ftip { min-height: 0; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); flex: none; }
+.ftip:hover:not(:disabled) { background: var(--line-2); border: 0; color: var(--accent); }
+.ftip.on { color: var(--accent); background: var(--accent-soft); }
+.fhint { display: block; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--ink-2); background: var(--accent-soft); border-radius: var(--r-f); padding: 8px 12px; }
+.zline { display: block; width: 100%; max-width: 420px; height: 104px; flex: none; justify-self: center; }
+.zl-axis { stroke: var(--line); stroke-width: 2; }
+.zl-zone { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.zl-you { fill: var(--surface); stroke: var(--good); stroke-width: 2; }
+.zl-opp { fill: var(--surface); stroke: var(--bad); stroke-width: 2; }
+.zl-num { font-size: 13px; font-weight: 700; fill: var(--ink); font-family: var(--f); }
+.zl-lab { font-size: 12px; font-weight: 600; fill: var(--muted); font-family: var(--f); }
 .note { padding: 10px 14px; border-left: 3px solid var(--line); background: var(--surface); border-radius: 0 var(--r-f) var(--r-f) 0; color: var(--ink-2); font-size: 14px; }
 .cabinet { display: grid; gap: 16px; }
 .cabinet h2 { margin: 0; }

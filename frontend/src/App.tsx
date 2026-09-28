@@ -6,6 +6,7 @@ import Dialog from "./Dialog";
 import Home, { SessionRow } from "./Home";
 import { Icon } from "./icons";
 import Result from "./Result";
+import { FIELD_HELP, FieldLabel, ScenarioHelp } from "./scenarioHelp";
 import { Go, initials, LABEL_RU, plural, recommend, RU, startScenario, TEST_KEY, View, Weak, WEAK_RU } from "./shared";
 
 const EMPTY: ScenarioCard = {
@@ -147,6 +148,8 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
   const [card, setCard] = useState<ScenarioCard>(scenario ? (copy ? { ...scenario, name: `${scenario.name} (копия)`, locked_by_org: false } : scenario) : EMPTY);
   const [brief, setBrief] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [help, setHelp] = useState(false);
   const [token, setToken] = useState(store.get("arena.adminToken") ?? "");
   const set = (k: keyof ScenarioCard, v: unknown) => setCard({ ...card, [k]: v });
   const setZone = (k: string, v: string) => setCard({ ...card, target_zone: { ...card.target_zone, [k]: k === "unit" ? v : Number(v) } });
@@ -159,21 +162,34 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       await startScenario(s.id, go, setErr);
     } catch (e) { setErr((e as Error).message); }
   };
-  const gen = async () => { setErr(""); try { const g = await api.generate(brief); setCard({ ...g, coach_tips: card.coach_tips, hints: card.hints }); } catch (e) { setErr((e as Error).message); } };
+  const gen = async () => {
+    setErr(""); setBusy(true);
+    try { const g = await api.generate(brief); setCard({ ...g, coach_tips: card.coach_tips, hints: card.hints }); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const lbl = (k: string, label: string) => <FieldLabel label={label} help={FIELD_HELP[k]} />;
   const text = (k: keyof ScenarioCard, label: string, area = false) => (
-    <label>{label}{area
+    <label>{lbl(k, label)}{area
       ? <textarea value={card[k] as string} onChange={(e) => set(k, e.target.value)} />
       : <input value={card[k] as string} onChange={(e) => set(k, e.target.value)} />}</label>
   );
   const select = (k: keyof ScenarioCard, label: string, opts: [string, string][]) => (
-    <label>{label}<select value={card[k] as string} onChange={(e) => set(k, e.target.value)}>{opts.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
+    <label>{lbl(k, label)}<select value={card[k] as string} onChange={(e) => set(k, e.target.value)}>{opts.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
   );
   return (
     <main className="form">
       <section className="gen">
-        <textarea placeholder="Опишите свою ситуацию своими словами — LLM соберёт карточку" value={brief} onChange={(e) => setBrief(e.target.value)} />
-        <button onClick={gen}>Сгенерировать карточку</button>
+        <div className="gen-h">
+          <label htmlFor="brief">Опишите ситуацию, и карточка соберётся сама</label>
+          <button type="button" className="ghost helpbtn" onClick={() => setHelp(true)}><Icon name="book" size={16} />Как заполнить сценарий</button>
+        </div>
+        <p className="small muted gen-sub">{FIELD_HELP.brief}</p>
+        <textarea id="brief" placeholder="Снимаю однушку два года за 28 тысяч. Хозяйка хочет 35, похожие квартиры рядом стоят 32–34. Готов на 30–31, максимум 32. Если не договоримся, перееду, это ещё 15 тысяч." value={brief} onChange={(e) => setBrief(e.target.value)} />
+        <div className="gen-foot">
+          <button onClick={gen} disabled={busy || brief.trim().length < 10}>{busy ? "Собираем карточку…" : "Сгенерировать карточку"}</button>
+          <span className="small muted">Проверьте поля после генерации: модель может ошибиться в числах.</span>
+        </div>
       </section>
+      {help && <ScenarioHelp onClose={() => setHelp(false)} />}
       {text("name", "Название")}{text("domain", "Сфера")}{text("topic", "Тема")}
       {select("difficulty", "Сложность", [["easy", "Лёгкая"], ["medium", "Средняя"], ["hard", "Сложная"]])}
       {select("tone", "Тон", [["neutral", "Нейтральный"], ["friendly", "Дружелюбный"], ["strict", "Строгий"], ["skeptical", "Скептичный"]])}
@@ -181,28 +197,28 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       {select("style", "Стиль собеседника", [["hard", "Жёсткий"], ["cooperative", "Сотрудничающий"], ["avoiding", "Уклоняющийся"], ["pressing", "Давящий"], ["emotional", "Эмоциональный"]])}
       {text("user_role", "Ваша роль")}{text("user_goal", "Ваша цель", true)}
       {text("opponent_role", "Роль собеседника")}
-      <label>Имя собеседника<input value={card.opponent_name ?? ""} maxLength={80} placeholder="Вымышленные имя и фамилия; если пусто, в диалоге будет роль" onChange={(e) => set("opponent_name", e.target.value)} /></label>
+      <label>{lbl("opponent_name", "Имя собеседника")}<input value={card.opponent_name ?? ""} maxLength={80} placeholder="Вымышленные имя и фамилия; если пусто, в диалоге будет роль" onChange={(e) => set("opponent_name", e.target.value)} /></label>
       {text("opponent_goal", "Цель собеседника", true)}
-      <label>Скрытые интересы собеседника (по строке)<textarea value={card.opponent_hidden_interests.join("\n")} onChange={(e) => set("opponent_hidden_interests", lines(e.target.value))} /></label>
+      <label>{lbl("opponent_hidden_interests", "Скрытые интересы собеседника (по строке)")}<textarea value={card.opponent_hidden_interests.join("\n")} onChange={(e) => set("opponent_hidden_interests", lines(e.target.value))} /></label>
       {text("opponent_batna", "BATNA собеседника")}{text("user_batna", "Ваша BATNA")}
       <fieldset><legend>Целевая зона соглашения</legend>
-        <label>Предмет и единица торга через запятую<input value={card.target_zone.unit} placeholder="стоимость доработки, тыс. руб." onChange={(e) => setZone("unit", e.target.value)} /></label>
-        <label>Ваша стартовая позиция<input type="number" value={card.target_zone.user_start} onChange={(e) => setZone("user_start", e.target.value)} /></label>
-        <label>Зона от<input type="number" value={card.target_zone.zone_min} onChange={(e) => setZone("zone_min", e.target.value)} /></label>
-        <label>Зона до<input type="number" value={card.target_zone.zone_max} onChange={(e) => setZone("zone_max", e.target.value)} /></label>
-        <label>Старт собеседника<input type="number" value={card.target_zone.opponent_start} onChange={(e) => setZone("opponent_start", e.target.value)} /></label>
-        <p className="muted small">Зона лежит между стартовыми позициями сторон.</p>
+        <label>{lbl("unit", "Предмет и единица торга через запятую")}<input value={card.target_zone.unit} placeholder="стоимость доработки, тыс. руб." onChange={(e) => setZone("unit", e.target.value)} /></label>
+        <label>{lbl("user_start", "Ваша стартовая позиция")}<input type="number" value={card.target_zone.user_start} onChange={(e) => setZone("user_start", e.target.value)} /></label>
+        <label>{lbl("zone_min", "Зона от")}<input type="number" value={card.target_zone.zone_min} onChange={(e) => setZone("zone_min", e.target.value)} /></label>
+        <label>{lbl("zone_max", "Зона до")}<input type="number" value={card.target_zone.zone_max} onChange={(e) => setZone("zone_max", e.target.value)} /></label>
+        <label>{lbl("opponent_start", "Старт собеседника")}<input type="number" value={card.target_zone.opponent_start} onChange={(e) => setZone("opponent_start", e.target.value)} /></label>
+        <p className="muted small">Зона лежит между стартовыми позициями сторон и не касается старта собеседника. Пример: вы 29, зона 30–32, собеседник 35.</p>
       </fieldset>
-      <label>Обязательные детали (по строке)<textarea value={card.mandatory_details.join("\n")} onChange={(e) => set("mandatory_details", lines(e.target.value))} /></label>
+      <label>{lbl("mandatory_details", "Обязательные детали (по строке)")}<textarea value={card.mandatory_details.join("\n")} onChange={(e) => set("mandatory_details", lines(e.target.value))} /></label>
       {text("context", "Контекст", true)}
-      <label>Первая реплика собеседника<textarea value={card.opening ?? ""} placeholder="Если пусто, собеседник начнёт сам: с сути вопроса и своей стартовой позиции"
+      <label>{lbl("opening", "Первая реплика собеседника")}<textarea value={card.opening ?? ""} placeholder="Если пусто, собеседник начнёт сам: с сути вопроса и своей стартовой позиции"
         onChange={(e) => set("opening", e.target.value)} /></label>
       {select("voice", "Голос собеседника в режиме «3D и голос»", [["female", "Женский"], ["male", "Мужской"]])}
       <AvatarField value={card.avatar_url} onChange={(v) => set("avatar_url", v)} />
       <label>Наставления перед стартом (по строке)<textarea value={(card.coach_tips ?? []).join("\n")} placeholder="Маскот покажет их до первого хода, перед стандартными советами по методу"
         onChange={(e) => set("coach_tips", e.target.value.split("\n"))} /></label>
       <HintsField value={card.hints ?? []} maxTurns={card.max_turns} onChange={(v) => set("hints", v)} />
-      <label>Лимит ходов<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
+      <label>{lbl("max_turns", "Лимит ходов")}<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
       <label className="check"><input type="checkbox" checked={card.locked_by_org} onChange={(e) => set("locked_by_org", e.target.checked)} />Зафиксировать для сотрудников организации</label>
       <label>Токен администратора (запасной способ; администратор организации фиксирует и меняет сценарии своей организации без токена)<input type="password" value={token} onChange={(e) => saveToken(e.target.value)} /></label>
       {err && <p className="error">{err}</p>}

@@ -36,11 +36,13 @@ Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "walk_away", "br
 
 
 class TargetZone(BaseModel):
-    unit: str = Field(min_length=1, description="предмет и единица торга через запятую: «стоимость доработки, тыс. руб.», «срок сдачи, рабочих дней», «рост цены поставки, %»")
-    user_start: float
-    zone_min: float
-    zone_max: float
-    opponent_start: float
+    unit: str = Field(min_length=1, description="предмет торга и единица через запятую, предмет первым: «стоимость доработки, тыс. руб.», "
+                      "«срок сдачи, рабочих дней», «рост цены поставки, %»; все четыре числа зоны — в этой единице")
+    user_start: float = Field(description="первое число, которое называет игрок; лучше для него, чем вся целевая зона, или равно её лучшему краю")
+    zone_min: float = Field(description="меньший край целевой зоны: диапазона, где сделка для игрока хорошая; лежит между стартами сторон")
+    zone_max: float = Field(description="больший край целевой зоны; худший для игрока край зоны — его граница, дальше выгоднее альтернатива")
+    opponent_start: float = Field(description="первое требование собеседника; направление «лучше для игрока» задаёт порядок: "
+                                  "игроку лучше большее число, если user_start больше opponent_start, и меньшее — если меньше")
 
     @model_validator(mode="after")
     def _consistent(self):
@@ -95,28 +97,28 @@ class HintOut(BaseModel):
 
 
 class ScenarioCard(BaseModel):
-    name: str = Field(min_length=1)
-    domain: str
-    topic: str
+    name: str = Field(min_length=1, description="название сценария в списке: предмет разговора и с кем, 3–7 слов; не имя собеседника")
+    domain: str = Field(description="сфера: «Закупки», «Работа в команде», «Аренда жилья»")
+    topic: str = Field(description="о чём торг и почему сейчас, одно предложение")
     difficulty: Difficulty = "medium"
     tone: Tone = "neutral"
     method: Method = "free"
     style: Style = "hard"
-    user_role: str = Field(min_length=1)
-    user_goal: str = Field(min_length=1)
-    opponent_role: str = Field(min_length=1)
+    user_role: str = Field(min_length=1, description="кто игрок в этой ситуации")
+    user_goal: str = Field(min_length=1, description="чего игрок хочет, с числами целевой зоны и тем, чем готов расплатиться за уступку")
+    opponent_role: str = Field(min_length=1, description="кто собеседник: должность и организация или отношение к игроку")
     opponent_name: str = Field(default="", max_length=80, description="вымышленные имя и фамилия собеседника, пол совпадает с голосом voice; "
                                "не имя реального известного человека")
-    opponent_goal: str = Field(min_length=1)
-    opponent_hidden_interests: list[str]
-    opponent_batna: str
-    user_batna: str
+    opponent_goal: str = Field(min_length=1, description="чего добивается собеседник и почему, с его стартовым числом")
+    opponent_hidden_interests: list[str] = Field(description="конкретные причины и ограничения собеседника, которые он раскрывает, только если о них спросили")
+    opponent_batna: str = Field(description="что собеседник сделает без соглашения")
+    user_batna: str = Field(description="что игрок сделает без соглашения: другой поставщик, другой оффер; действие, а не число торга")
     target_zone: TargetZone
-    mandatory_details: list[str]
-    context: str
-    opening: str = Field(default="", max_length=1500, description="первая реплика собеседника от его лица: суть вопроса и его стартовая позиция "
-                         "target_zone.opponent_start словами живого человека, в характере его стиля; должность не называет")
-    max_turns: int = Field(default=10, ge=3, le=30)
+    mandatory_details: list[str] = Field(description="2–4 коротких факта, которые игрок должен произнести; тренажёр проверяет, прозвучали ли они")
+    context: str = Field(description="ситуация для игрока от второго лица: что произошло, откуда взялись числа зоны, что будет без соглашения")
+    opening: str = Field(default="", max_length=1500, description="первая реплика собеседника вслух: суть вопроса и число target_zone.opponent_start цифрами, "
+                         "словами живого человека в характере его стиля; не представляется и не называет должность; пусто — реплику напишет тренажёр")
+    max_turns: int = Field(default=10, ge=3, le=30, description="сколько реплик у игрока; обычно 10")
     locked_by_org: bool = False
     voice: Literal["female", "male"] = Field(default="female", description="голос собеседника в режиме 3D и голос")
     avatar_url: str | None = Field(default=None, pattern=AVATAR_URL, description="GLB-аватар собеседника; при генерации карточки не заполняй")

@@ -1,14 +1,20 @@
 """Вызовы LLM через LiteLLM (любой провайдер) и Instructor (ответы строго по Pydantic-схемам)."""
+import logging
+import threading
+
 import instructor
 import litellm
-from pydantic import field_validator
+from instructor.core.exceptions import InstructorRetryException
 
+from . import cardgen
 from .config import settings
 from .engine.rules import METHOD_AXES
 from .schemas import JudgeReport, MoveAnalysis, OpponentState, ScenarioCard
 
 _client = instructor.from_litellm(litellm.completion)
-
+_calls = threading.local()
+_client.on("completion:kwargs", lambda *a, **k: setattr(_calls, "n", getattr(_calls, "n", 0) + 1))
+log = logging.getLogger(__name__)
 
 
 def _kwargs() -> dict:
@@ -148,29 +154,19 @@ def judge(card: ScenarioCard, turns: list[dict], outcome_note: str = "") -> Judg
 
 
 def generate_card(description: str) -> ScenarioCard:
-    system = (
-        "Собери карточку учебного сценария переговоров по описанию пользователя. Заполни все поля, "
-        "целевую зону соглашения задай числами; единицу торга пиши через запятую как предмет и единицу "
-        "(«стоимость доработки, тыс. руб.», «срок сдачи, рабочих дней»). Контекст — 3–6 предложений от второго лица: "
-        "кто пользователь, что произошло, почему разговор сейчас, откуда цифры, что будет без соглашения. "
-        "opening — первая реплика собеседника от его лица, в характере его стиля: суть вопроса и его стартовая позиция "
-        "(opponent_start) числом, без названия своей должности. 2–4 обязательные детали — то, что реально произносят в разговоре. "
-        "opponent_name — вымышленные имя и фамилия собеседника, русские, если в описании не сказано иное; пол по полю voice; "
-        "не бери имена известных людей. Наставления и подсказки не заполняй."
-    )
-    card = _client.chat.completions.create(
-        response_model=GeneratedCard,
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": description}],
-        max_retries=2,
-        **_kwargs(),
-    )
-    return ScenarioCard(**card.model_dump())
-
-
-class GeneratedCard(ScenarioCard):
-    """Карточка от LLM: наставления и подсказки пишет автор сценария, от модели их не берём, чтобы кривое условие не сорвало генерацию."""
-
-    @field_validator("coach_tips", "hints", mode="before")
-    @classmethod
-    def _drop(cls, v):
-        return []
+    """Карточка по описанию. Инструкция и схема — в cardgen; ошибки, которые модель не исправила за три попытки,
+    поднимаются как CardGenError с понятным текстом."""
+    _calls.n = 0
+    try:
+        g = _client.chat.completions.create(
+            response_model=cardgen.GeneratedCard,
+            messages=[{"role": "system", "content": cardgen.system_prompt()},
+                      {"role": "user", "content": f"<description>\n{description}\n</description>"}],
+            max_retries=2,
+            **_kwargs(),
+        )
+    except InstructorRetryException as exc:
+        log.warning("карточка не собралась за %s вызовов LLM", _calls.n)
+        raise cardgen.CardGenError(cardgen.explain(exc)) from exc
+    log.warning("карточка собрана за %s вызовов LLM", _calls.n)
+    return cardgen.to_card(g)

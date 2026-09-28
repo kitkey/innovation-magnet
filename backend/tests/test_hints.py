@@ -139,10 +139,12 @@ def test_rewind_recomputes_fired_hints(client):
 
 
 def test_generated_card_drops_hints():
-    from app.llm import GeneratedCard
-    card = GeneratedCard(**custom_card())
-    assert card.hints == [] and card.coach_tips == []
-    assert ScenarioCard(**card.model_dump()).opponent_name == SUPPLIER.opponent_name
+    from app.cardgen import GeneratedCard, to_card
+    data = custom_card()
+    data |= {"title": data["name"], "target_zone": data["target_zone"] | {"player_wants": "less"}}
+    card = to_card(GeneratedCard(**data))
+    assert card.hints == [] and card.coach_tips == [] and card.avatar_url is None
+    assert card.opponent_name == SUPPLIER.opponent_name
 
 
 def test_llm_reply_speaker_prefix_is_stripped():

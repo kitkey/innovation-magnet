@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from . import llm, scoring, service, voice
 from .accounts import WRITE_LOCK, current_user, router as accounts_router
+from .cardgen import CardGenError
 from .config import settings
 from .db import ScenarioRow, SessionLocal, SessionRow, UserRow, get_db, init_db
 from .engine import rules
@@ -141,7 +142,9 @@ def generate_scenario(brief: ScenarioBrief):
     if settings.offline_mode:
         raise HTTPException(503, "Генерация недоступна без LLM")
     try:
-        return llm.generate_card(brief.description).model_copy(update={"avatar_url": None})
+        return llm.generate_card(brief.description)
+    except CardGenError as exc:
+        raise HTTPException(422, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(502, f"LLM недоступна: {exc}") from exc
 
