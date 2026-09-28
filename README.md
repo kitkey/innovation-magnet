@@ -74,6 +74,7 @@ npm run dev   # http://localhost:5173
 - **YandexGPT** через OpenAI-совместимый API Yandex Cloud. Сервисному аккаунту нужна роль `ai.languageModels.user`:
   ```
   LLM_MODEL=openai/gpt://<folder_id>/yandexgpt/latest
+  # карточка по описанию генерируется разово, поэтому при yandexgpt-lite она сама идёт в YandexGPT Pro (или задайте LLM_CARDGEN_MODEL)
   LLM_API_BASE=https://llm.api.cloud.yandex.net/v1
   LLM_API_KEY=<API-ключ сервисного аккаунта>
   ```

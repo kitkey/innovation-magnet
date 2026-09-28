@@ -17,8 +17,8 @@ _client.on("completion:kwargs", lambda *a, **k: setattr(_calls, "n", getattr(_ca
 log = logging.getLogger(__name__)
 
 
-def _kwargs() -> dict:
-    kw = {"model": settings.llm_model, "timeout": settings.llm_timeout}
+def _kwargs(model: str | None = None) -> dict:
+    kw = {"model": model or settings.llm_model, "timeout": settings.llm_timeout}
     fallbacks = [m.strip() for m in settings.llm_fallbacks.split(",") if m.strip()]
     if fallbacks:
         kw["fallbacks"] = fallbacks
@@ -30,6 +30,14 @@ def _kwargs() -> dict:
     if settings.llm_api_base:
         kw["api_base"] = settings.llm_api_base
     return kw
+
+
+def cardgen_model() -> str:
+    """Карточка генерируется разово, и слабая модель оставляет пустыми интересы, имя и альтернативу собеседника.
+    Поэтому для неё отдельная модель: LLM_CARDGEN_MODEL, а если не задана и основная — YandexGPT Lite, то YandexGPT Pro."""
+    if settings.llm_cardgen_model:
+        return settings.llm_cardgen_model
+    return settings.llm_model.replace("yandexgpt-lite/", "yandexgpt/")
 
 
 def _gender(card: ScenarioCard) -> str:
@@ -163,7 +171,7 @@ def generate_card(description: str) -> ScenarioCard:
             messages=[{"role": "system", "content": cardgen.system_prompt()},
                       {"role": "user", "content": f"<description>\n{description}\n</description>"}],
             max_retries=2,
-            **_kwargs(),
+            **_kwargs(cardgen_model()),
         )
     except InstructorRetryException as exc:
         log.warning("карточка не собралась за %s вызовов LLM", _calls.n)
