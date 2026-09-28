@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile } from "./account";
+import { ART, Empty, Scene } from "./art";
 import { api, AUTH_KEY, Hint, HistoryItem, Scenario, ScenarioCard, store, User } from "./api";
 import Dialog from "./Dialog";
 import Home, { SessionRow } from "./Home";
 import { Icon } from "./icons";
 import Result from "./Result";
-import { Go, initials, LABEL_RU, recommend, RU, startScenario, TEST_KEY, View, Weak, WEAK_RU } from "./shared";
+import { Go, initials, LABEL_RU, plural, recommend, RU, startScenario, TEST_KEY, View, Weak, WEAK_RU } from "./shared";
 
 const EMPTY: ScenarioCard = {
   name: "", domain: "", topic: "", difficulty: "medium", tone: "neutral", method: "free", style: "hard",
@@ -214,12 +215,33 @@ function History({ go }: { go: Go }) {
   const [items, setItems] = useState<HistoryItem[] | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => { api.history().then(setItems).catch((e) => setErr(`История не загрузилась: ${e.message}`)); }, []);
+  const done = (items ?? []).filter((h) => h.status === "finished");
+  const inZone = done.filter((h) => h.outcome === "agreement_in_zone").length;
+  const scores = done.map((h) => h.score).filter((x): x is number => x != null);
+  const best = scores.length ? Math.round(Math.max(...scores)) : null;
   return (
-    <main>
-      <h2>История сессий</h2>
-      {err && <p className="error">{err}</p>}
-      {items && !items.length && <p className="empty">Сессий пока нет. Начните любой сценарий, и он появится здесь вместе с разбором.</p>}
-      {items && items.length > 0 && <div className="card sessions">{items.map((s) => <SessionRow key={s.id} h={s} go={go} />)}</div>}
+    <main className="flush">
+      <Scene art={ART.folders}>
+        <span className="caps">Ваши переговоры</span>
+        <h1>История сессий</h1>
+        {items && items.length > 0
+          ? <div className="facts">
+            <div className="fact"><span className="num">{items.length}</span><span className="caps">{plural(items.length, "сессия", "сессии", "сессий")}</span></div>
+            <div className="fact"><span className="num">{inZone}</span><span className="caps">{plural(inZone, "соглашение", "соглашения", "соглашений")} в целевой зоне</span></div>
+            {best !== null && <div className="fact"><span className="num">{best}</span><span className="caps">лучший балл</span></div>}
+          </div>
+          : <p className="lead">Здесь собираются все сессии: незавершённые можно продолжить, по завершённым открыть разбор.</p>}
+      </Scene>
+      <div className="body">
+        {err && <p className="error">{err}</p>}
+        {items && !items.length && (
+          <Empty art={ART.coffee} title="Сессий пока нет">
+            <p>Начните любой сценарий, и он появится здесь вместе с разбором.</p>
+            <button className="primary" onClick={() => go({ name: "list" })}>К сценариям<Icon name="arrow" size={16} /></button>
+          </Empty>
+        )}
+        {items && items.length > 0 && <div className="card sessions">{items.map((s) => <SessionRow key={s.id} h={s} go={go} />)}</div>}
+      </div>
     </main>
   );
 }

@@ -3,6 +3,7 @@ import { api, fmtValue, HintOut, Message, MODE_KEY, Mood, ScenarioCard, SessionV
 import type { Say } from "./avatar/Avatar3D";
 import { CoachCorner, CoachPanel, coachTips, InlineHint } from "./Coach";
 import { Icon } from "./icons";
+import { hasGuide, MethodGuide, methodName } from "./methods";
 import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
 import { ACTIVE_KEY, cap, Delta, Go, hhmm, initials, Marks, meters, oppName, parseAt, RU, STYLE_RU, turnStates, who } from "./shared";
 import Recorder from "./voice/Recorder";
@@ -82,6 +83,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
   const [speaking, setSpeaking] = useState(false);
   const [menu, setMenu] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [guide, setGuide] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const setMode = (m: OpponentMode) => { setModeState(m); store.set(MODE_KEY, m); if (m === "text") setSpeaking(false); };
@@ -190,6 +192,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
           <span>{meta}</span>
           <em>ход {s.turn} из {s.max_turns}</em>
         </div>
+        {hasGuide(card.method) && <button className="ghost mbtn desk" title="Справочник по методу" onClick={() => setGuide(true)}><Icon name="book" />Метод {methodName(card.method)}</button>}
         <div className="turnc desk"><span className="num">Ход {s.turn} из {s.max_turns}</span><Segs n={s.turn} of={s.max_turns} /></div>
         <div className="desk seg-desk"><ModeTabs mode={mode} setMode={setMode} /></div>
         <button className="desk" disabled={!ready || s.turn === 0} onClick={undo}><Icon name="undo" />Отменить ход</button>
@@ -200,6 +203,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
             <div className="dmenu">
               <ModeTabs mode={mode} setMode={(v) => { setMode(v); setMenu(false); }} />
               <button onClick={() => { setMenu(false); setBriefOpen(true); }}><Icon name="clip" />Ситуация и цель</button>
+              {hasGuide(card.method) && <button onClick={() => { setMenu(false); setGuide(true); }}><Icon name="book" />Метод {methodName(card.method)}: справочник</button>}
               {tips.length > 0 && !intro && <button onClick={openTips}><Icon name="book" />Наставления</button>}
               <button disabled={!ready || s.turn === 0} onClick={undo}><Icon name="undo" />Отменить ход</button>
               <button disabled={!ready} onClick={finish}><Icon name="flag" />Завершить</button>
@@ -251,7 +255,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
                   if (mm.role === "opponent") return (
                     <div key={i} className="rep opp">
                       <div className="mh"><b>{name}</b><span className="num">{hhmm(parseAt(mm.at))}</span></div>
-                      <p>{mm.text}</p>
+                      <div className="body"><p>{mm.text}</p></div>
                     </div>
                   );
                   const n = ++userN;
@@ -303,6 +307,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
           </div>
         </div>
       )}
+      {guide && <MethodGuide method={card.method} onClose={() => setGuide(false)} />}
       {!intro && tipsOpen && <CoachPanel tips={tips} method={card.method} intro={false} onDone={() => setTipsOpen(false)} />}
     </div>
   );

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { ART, Empty, Scene } from "./art";
+import { Icon } from "./icons";
 import { api, AUTH_KEY, Board, MemberStats, MODE_KEY, Org, Period, Season, store, User } from "./api";
 import { fmtDate, MedalDot, MedalTally, MEDAL_RU, ProfileMedals, ruleText, SeasonPanel, seasonTitle } from "./medals";
 
@@ -21,6 +23,12 @@ function Tabs<T extends string>({ value, options, onChange }: { value: T; option
 }
 
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)}%`);
+const num = (x: number | null) => (x === null ? "—" : x.toLocaleString("ru-RU", { maximumFractionDigits: 1 }));
+const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+function plural(n: number, [one, few, many]: [string, string, string]) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
+}
 
 export function Auth({ onUser }: { onUser: SetUser }) {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -38,7 +46,14 @@ export function Auth({ onUser }: { onUser: SetUser }) {
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <main className="form narrow">
+    <main className="flush">
+      <Scene art={ART.key}>
+        <span className="caps">Аккаунт</span>
+        <h1>{mode === "login" ? "Вход" : "Регистрация"}</h1>
+        <p className="lead">С аккаунтом сессии попадают в лидерборд и кабинет организации.</p>
+      </Scene>
+      <div className="body">
+        <section className="card form narrow">
       <Tabs value={mode} options={[["login", "Вход"], ["register", "Регистрация"]]} onChange={(m) => { setMode(m); setErr(""); }} />
       <label>Логин<input value={login} autoComplete="username" onChange={(e) => setLogin(e.target.value)} /></label>
       {mode === "register" && <label>Имя в лидерборде<input value={name} onChange={(e) => setName(e.target.value)} /></label>}
@@ -48,6 +63,8 @@ export function Auth({ onUser }: { onUser: SetUser }) {
       {err && <p className="error">{err}</p>}
       <button className="primary" disabled={busy || !login || !password} onClick={submit}>{mode === "login" ? "Войти" : "Зарегистрироваться"}</button>
       <p className="small muted">Без входа тренажёр работает в гостевом режиме: сессии не попадают в лидерборд и кабинет организации.</p>
+        </section>
+      </div>
     </main>
   );
 }
@@ -69,36 +86,50 @@ export function Profile({ user, onUser }: { user: User; onUser: SetUser }) {
     onUser(null);
   };
   return (
-    <main className="form narrow">
-      <h2>Профиль</h2>
-      <p className="muted">Логин: {user.login}</p>
-      <label>Имя<div className="row"><input value={name} onChange={(e) => setName(e.target.value)} />
-        <button disabled={!name.trim() || name === user.display_name} onClick={() => run(() => api.updateProfile({ display_name: name }), "Имя сохранено")}>Сохранить</button></div></label>
-      <label className="check"><input type="checkbox" checked={user.public_in_leaderboard}
-        onChange={(e) => run(() => api.updateProfile({ public_in_leaderboard: e.target.checked }), "Настройка сохранена")} />Показывать меня в общем лидерборде</label>
-      <label>Собеседник по умолчанию<Tabs value={mode} options={[["text", "Текст"], ["avatar", "3D и голос"]]}
-        onChange={(m) => { setMode(m); store.set(MODE_KEY, m); }} /></label>
-      <p className="small muted">В режиме «3D и голос» собеседник отвечает голосом и мимикой, текст ответа всё равно остаётся в чате. Переключается и в самом диалоге.</p>
-      <section className="panel">
-        <h3>Организация</h3>
-        {user.org_id ? (
-          <>
-            <p>{user.org_name} · {ROLE_RU[user.role]}</p>
-            <button onClick={() => { if (confirm(`Выйти из организации «${user.org_name}»? Вернуться можно по коду приглашения.`)) run(() => api.leaveOrg(), "Вы вышли из организации"); }}>Выйти из организации</button>
-          </>
-        ) : (
-          <>
-            <label>Код приглашения<div className="row"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Например, 3F9A1C0B" />
-              <button disabled={!code.trim()} onClick={() => run(() => api.joinOrg(code), "Вы вступили в организацию")}>Вступить</button></div></label>
-            <label>Или создайте свою<div className="row"><input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Название организации" />
-              <button disabled={orgName.trim().length < 2} onClick={() => run(() => api.createOrg(orgName), "Организация создана, вы её администратор")}>Создать</button></div></label>
-          </>
-        )}
-      </section>
-      <ProfileMedals />
-      {msg && <p className="note">{msg}</p>}
-      {err && <p className="error">{err}</p>}
-      <button className="link" onClick={logout}>Выйти</button>
+    <main className="flush">
+      <Scene art={ART.key}>
+        <span className="caps">Профиль</span>
+        <h1>{user.display_name}</h1>
+        <p className="lead">Логин {user.login}{user.org_id ? ` · ${user.org_name}, ${ROLE_RU[user.role]}` : " · без организации"}</p>
+      </Scene>
+      <div className="body grid2">
+        <div className="col">
+          <section className="card form">
+            <h3>Имя и видимость</h3>
+            <label>Имя в лидерборде<div className="row nowrap"><input value={name} onChange={(e) => setName(e.target.value)} />
+              <button disabled={!name.trim() || name === user.display_name} onClick={() => run(() => api.updateProfile({ display_name: name }), "Имя сохранено")}>Сохранить</button></div></label>
+            <label className="check"><input type="checkbox" checked={user.public_in_leaderboard}
+              onChange={(e) => run(() => api.updateProfile({ public_in_leaderboard: e.target.checked }), "Настройка сохранена")} />Показывать меня в общем лидерборде</label>
+          </section>
+          <section className="card form">
+            <h3>Собеседник по умолчанию</h3>
+            <Tabs value={mode} options={[["text", "Текст"], ["avatar", "3D и голос"]]} onChange={(m) => { setMode(m); store.set(MODE_KEY, m); }} />
+            <p className="small muted">В режиме «3D и голос» собеседник отвечает голосом и мимикой, текст ответа всё равно остаётся в чате. Переключается и в самом диалоге.</p>
+          </section>
+        </div>
+        <div className="col">
+          <section className="card form">
+            <h3>Организация</h3>
+            {user.org_id ? (
+              <>
+                <div className="orgline"><span className="ava sq">{initialsOf(user.org_name ?? "")}</span><div><b>{user.org_name}</b><span className="small muted">{ROLE_RU[user.role]}</span></div></div>
+                <button onClick={() => { if (confirm(`Выйти из организации «${user.org_name}»? Вернуться можно по коду приглашения.`)) run(() => api.leaveOrg(), "Вы вышли из организации"); }}>Выйти из организации</button>
+              </>
+            ) : (
+              <>
+                <label>Код приглашения<div className="row nowrap"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Например, 3F9A1C0B" />
+                  <button disabled={!code.trim()} onClick={() => run(() => api.joinOrg(code), "Вы вступили в организацию")}>Вступить</button></div></label>
+                <label>Или создайте свою<div className="row nowrap"><input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Название организации" />
+                  <button disabled={orgName.trim().length < 2} onClick={() => run(() => api.createOrg(orgName), "Организация создана, вы её администратор")}>Создать</button></div></label>
+              </>
+            )}
+          </section>
+          <ProfileMedals />
+          {msg && <p className="note">{msg}</p>}
+          {err && <p className="error">{err}</p>}
+          <button className="logout" onClick={logout}><Icon name="back" size={16} />Выйти из аккаунта</button>
+        </div>
+      </div>
     </main>
   );
 }
@@ -131,53 +162,86 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
     } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
   };
   const regen = async () => { try { const org = await api.newInvite(); if (data) setData({ ...data, org }); } catch (e) { setErr((e as Error).message); } };
-  if (!data) return <main>{err ? <p className="error">{err}</p> : <p>Загрузка…</p>}</main>;
+  if (!data) return <main>{err ? <p className="error">{err}</p> : <p className="muted">Загрузка…</p>}</main>;
   const best = leaders(data.members);
+  const max = Math.max(1, ...data.members.map((m) => m.sessions));
   return (
-    <main className="cabinet">
-      <h2>{data.org.name}</h2>
-      <section className="panel">
-        <p>Код приглашения: <b className="code">{data.org.invite_code}</b></p>
-        <div className="row">
-          <button onClick={() => navigator.clipboard?.writeText(data.org.invite_code ?? "")}>Скопировать</button>
-          <button onClick={regen}>Выпустить новый код</button>
+    <main className="flush">
+      <Scene art={ART.team}>
+        <span className="caps">Кабинет организации</span>
+        <h1>{data.org.name}</h1>
+        <div className="facts">
+          <div className="fact"><span className="num">{data.members.length}</span><span className="caps">{plural(data.members.length, ["участник", "участника", "участников"])}</span></div>
+          <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.sessions, 0)}</span><span className="caps">сессий за период</span></div>
+          <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.training_minutes, 0)}</span><span className="caps">минут тренировок</span></div>
         </div>
-        <p className="small muted">Сотрудник вводит код в профиле. Старый код после выпуска нового перестаёт работать.</p>
-      </section>
-      <SeasonPanel onChanged={load} />
-      <div className="row between">
-        <Tabs value={period} options={PERIOD_SEASON_RU} onChange={setPeriod} />
-        <span className="small muted">{seasonTitle(data.season.name)}, с {fmtDate(data.season.started_at)}</span>
-      </div>
-      {err && <p className="error">{err}</p>}
-      {best.length > 0 && (
-        <section className="panel">
-          <h3>Лучшие за период</h3>
-          <ul className="plain">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}:</span> {n} · {v}</li>)}</ul>
-        </section>
-      )}
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Участник</th><th>Сессий</th><th>Минут</th><th>В зоне</th><th>Рейтинг</th><th>Средние оценки по осям</th><th>Права</th></tr></thead>
-          <tbody>{data.members.map((m) => (
-            <tr key={m.id}>
-              <td>{m.display_name}<div className="small muted">{m.login}{m.role === "org_admin" ? " · администратор" : ""}</div></td>
-              <td>{m.sessions}</td><td>{m.training_minutes}</td><td>{pct(m.in_zone_share)}</td><td>{m.rating ?? "—"}</td>
-              <td className="small">{Object.entries(m.axes).map(([k, v]) => <div key={k}>{k}: {v}</div>)}{!Object.keys(m.axes).length && "—"}</td>
-              <td className="small">
-                <div className="row">
-                  {m.role === "org_admin"
-                    ? <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "member"))}>Снять администратора</button>
-                    : <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "org_admin"))}>Сделать администратором</button>}
-                  {m.id !== user.id && <button disabled={!!busy} onClick={() => { if (confirm(`Удалить ${m.display_name} из организации? История сессий останется в профиле участника.`)) act(m.id, () => api.removeMember(m.id)); }}>Удалить</button>}
-                </div>
-              </td>
-            </tr>
-          ))}</tbody>
-        </table>
+      </Scene>
+      <div className="body grid2 org">
+        <div className="col">
+          <section className="card invite">
+            <span className="caps">Код приглашения</span>
+            <b className="code big">{data.org.invite_code}</b>
+            <div className="row">
+              <button onClick={() => navigator.clipboard?.writeText(data.org.invite_code ?? "")}><Icon name="copy" size={16} />Скопировать</button>
+              <button className="ghost" onClick={regen}>Выпустить новый код</button>
+            </div>
+            <p className="small muted">Сотрудник вводит код в профиле. Старый код после выпуска нового перестаёт работать.</p>
+          </section>
+          {best.length > 0 && (
+            <section className="card">
+              <h3>Лучшие за период</h3>
+              <ul className="plain bests">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}</span><b>{n}</b><span className="num">{Math.round(v)}</span></li>)}</ul>
+            </section>
+          )}
+          <SeasonPanel onChanged={load} />
+        </div>
+        <div className="col">
+          <div className="toolbar">
+            <h2>Участники</h2>
+            <Tabs value={period} options={PERIOD_SEASON_RU} onChange={setPeriod} />
+          </div>
+          <p className="small muted">{seasonTitle(data.season.name)}, с {fmtDate(data.season.started_at)}</p>
+          {err && <p className="error">{err}</p>}
+          {data.members.length <= 1 && (
+            <Empty art={ART.team} title="Пока вы здесь один">
+              <p>Отправьте коллегам код приглашения: они введут его в профиле и появятся в этом списке со своей статистикой.</p>
+            </Empty>
+          )}
+          <div className="members">{data.members.map((m) => (
+            <article key={m.id} className="card member">
+              <div className="mhead">
+                <span className="ava">{initialsOf(m.display_name)}</span>
+                <div><b>{m.display_name}</b><span className="small muted">{m.login}{m.role === "org_admin" ? " · администратор" : ""}</span></div>
+                <span className="rating"><span className="num">{num(m.rating)}</span><span className="caps">рейтинг</span></span>
+              </div>
+              <div className="mstats">
+                <span><b className="num">{m.sessions}</b>{plural(m.sessions, ["сессия", "сессии", "сессий"])}<i><i style={{ width: `${(m.sessions / max) * 100}%` }} /></i></span>
+                <span><b className="num">{m.training_minutes}</b>минут</span>
+                <span><b className="num">{pct(m.in_zone_share)}</b>в целевой зоне</span>
+              </div>
+              {Object.keys(m.axes).length > 0 && (
+                <div className="maxes">{Object.entries(m.axes).map(([k, v]) => (
+                  <div key={k} className="maxis"><span>{k}</span><span className="num">{Math.round(v)}</span><div className="track"><div className={`fill ${v < 40 ? "low" : ""}`} style={{ width: `${v}%` }} /></div></div>
+                ))}</div>
+              )}
+              <div className="row macts">
+                {m.role === "org_admin"
+                  ? <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "member"))}>Снять администратора</button>
+                  : <button disabled={!!busy} onClick={() => act(m.id, () => api.setMemberRole(m.id, "org_admin"))}>Сделать администратором</button>}
+                {m.id !== user.id && <button className="ghost" disabled={!!busy} onClick={() => { if (confirm(`Удалить ${m.display_name} из организации? История сессий останется в профиле участника.`)) act(m.id, () => api.removeMember(m.id)); }}>Удалить</button>}
+              </div>
+            </article>
+          ))}</div>
+        </div>
       </div>
     </main>
   );
+}
+
+type Row = Board["rows"][number];
+
+function Place({ r, i }: { r: Row; i: number }) {
+  return <span className="place num">{i + 1}{r.medal && <MedalDot medal={r.medal} title={`${MEDAL_RU[r.medal]}, если закрыть сезон сейчас`} />}</span>;
 }
 
 export function Leaderboard({ user }: { user: User | null }) {
@@ -186,33 +250,62 @@ export function Leaderboard({ user }: { user: User | null }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => { setErr(""); setBoard(null); api.leaderboard(scope, period).then(setBoard).catch((e) => setErr(e.message)); }, [scope, period]);
+  const rows = board?.rows ?? [];
+  const top = rows.slice(0, 3);
+  const me = rows.findIndex((r) => r.me);
+  const sub = (r: Row) => (scope === "global" ? r.org_name ?? "без организации" : `${r.sessions} ${plural(r.sessions, ["сессия", "сессии", "сессий"])} с оценкой`);
   return (
-    <main className="cabinet">
-      <h2>Лидерборд</h2>
-      <div className="row between">
-        <Tabs value={scope} options={user?.org_id ? [["org", user.org_name ?? "Организация"], ["global", "Общий"]] : [["global", "Общий"]]} onChange={setScope} />
-        <Tabs value={period} options={scope === "org" ? PERIOD_SEASON_RU : PERIOD_RU} onChange={setPeriod} />
-      </div>
-      {scope === "org" && board?.season && board.medal_rule && (
-        <p className="small muted">{seasonTitle(board.season.name)}, с {fmtDate(board.season.started_at)}. {ruleText(board.medal_rule)}
-          {board.medal_rule.slots > 0 && " Метка у места показывает, какую медаль участник получит, если сезон закроют сейчас."}</p>
-      )}
-      {err && <p className="error">{err}</p>}
-      {board && (board.rows.length ? (
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Участник</th>{scope === "global" && <th>Организация</th>}<th>Рейтинг</th><th>Сессий с оценкой</th></tr></thead>
-            <tbody>{board.rows.map((r, i) => (
-              <tr key={i} className={r.me ? "me" : ""}>
-                <td className="place">{i + 1}{r.medal && <MedalDot medal={r.medal} title={`${MEDAL_RU[r.medal]}, если закрыть сезон сейчас`} />}</td>
-                <td>{r.display_name}<MedalTally counts={r.medals} /></td>{scope === "global" && <td>{r.org_name ?? "—"}</td>}<td>{r.rating}</td><td>{r.sessions}</td>
-              </tr>
-            ))}</tbody>
-          </table>
+    <main className="flush">
+      <Scene art={ART.podium}>
+        <span className="caps">{scope === "org" ? user?.org_name ?? "Организация" : "Все участники"}</span>
+        <h1>Лидерборд</h1>
+        <p className="lead">{scope === "org" && board?.season && board.medal_rule
+          ? <>{seasonTitle(board.season.name)}, с {fmtDate(board.season.started_at)}. {ruleText(board.medal_rule)}</>
+          : "Рейтинг по лучшим сессиям за период. В общем лидерборде только те, кто разрешил это в профиле."}</p>
+        {me >= 0 && <p className="mine">Вы на <b className="num">{me + 1}</b> месте, рейтинг <b className="num">{num(rows[me].rating)}</b></p>}
+      </Scene>
+      <div className="body">
+        <div className="toolbar">
+          <Tabs value={scope} options={user?.org_id ? [["org", user.org_name ?? "Организация"], ["global", "Общий"]] : [["global", "Общий"]]} onChange={setScope} />
+          <Tabs value={period} options={scope === "org" ? PERIOD_SEASON_RU : PERIOD_RU} onChange={setPeriod} />
         </div>
-      ) : <p className="muted">За этот период оценённых сессий нет.</p>)}
-      <p className="small muted">Очко сессии: средняя оценка судьи по осям × сложность (лёгкая 0,8, средняя 1,0, сложная 1,25) + 10 за соглашение в целевой зоне.
-        Рейтинг: среднее по {board?.top_n ?? 5} лучшим сессиям за период{scope === "org" ? " внутри сезона" : ""}. Цифры у имени — медали за прошлые сезоны. {scope === "global" && "В общем лидерборде только те, кто разрешил это в профиле."}</p>
+        {err && <p className="error">{err}</p>}
+        {!board && !err && <p className="muted">Загрузка…</p>}
+        {board && !rows.length && (
+          <Empty art={ART.podium} title="За этот период оценённых сессий нет">
+            <p>Завершите сессию с разбором, и рейтинг появится здесь. Или выберите период подлиннее.</p>
+          </Empty>
+        )}
+        {top.length > 0 && (
+          <div className="podium">{top.map((r, i) => (
+            <article key={i} className={`card pod p${i + 1} ${r.medal ? `m-${r.medal}` : ""} ${r.me ? "me" : ""}`}>
+              <div className="podtop"><Place r={r} i={i} /><span className="ava">{initialsOf(r.display_name)}</span></div>
+              <b className="nm">{r.display_name}{r.me && <span className="you">вы</span>}</b>
+              <span className="small muted">{sub(r)}</span>
+              <div className="podfoot"><span className="score num">{num(r.rating)}</span><span className="caps">рейтинг</span><MedalTally counts={r.medals} /></div>
+            </article>
+          ))}</div>
+        )}
+        {rows.length > 3 && (
+          <div className="card board">
+            <div className="brow bh"><span>#</span><span>Участник</span><span>Рейтинг</span><span>Сессий</span></div>
+            {rows.slice(3).map((r, k) => (
+              <div key={k} className={`brow ${r.me ? "me" : ""}`}>
+                <Place r={r} i={k + 3} />
+                <span className="who2"><b>{r.display_name}{r.me && <span className="you">вы</span>}<MedalTally counts={r.medals} /></b>{scope === "global" && <span className="small muted">{r.org_name ?? "без организации"}</span>}</span>
+                <span className="num sc">{num(r.rating)}</span>
+                <span className="num muted">{r.sessions}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="rules">
+          <Icon name="book" size={18} />
+          <p className="small">Очко сессии: средняя оценка судьи по осям × сложность (лёгкая 0,8, средняя 1,0, сложная 1,25) + 10 за соглашение в целевой зоне.
+            Рейтинг: среднее по {board?.top_n ?? 5} лучшим сессиям за период{scope === "org" ? " внутри сезона" : ""}.
+            {scope === "org" && board?.medal_rule && board.medal_rule.slots > 0 && " Метка у места показывает, какую медаль участник получит, если сезон закроют сейчас."} Цифры у имени — медали за прошлые сезоны.</p>
+        </div>
+      </div>
     </main>
   );
 }

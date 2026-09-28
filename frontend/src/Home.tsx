@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, editKeys, HistoryItem, Scenario, SessionView, store, User } from "./api";
+import { Art, ART, Empty, GroupArt, Scene } from "./art";
 import { MASCOT } from "./Coach";
 import { Icon } from "./icons";
-import { ACTIVE_KEY, dayLabel, DOMAIN_ICON, Go, METHOD_ICON, OUTCOME, outcomeTone, parseAt, plural, recommend, RU, startScenario, STYLE_RU, testResult, WEAK_RU } from "./shared";
+import { ACTIVE_KEY, dayLabel, Go, METHOD_ICON, OUTCOME, outcomeTone, parseAt, plural, recommend, RU, startScenario, STYLE_RU, testResult, WEAK_RU } from "./shared";
 
 function Diff({ level }: { level: Scenario["difficulty"] }) {
   const n = level === "easy" ? 1 : level === "medium" ? 2 : 3;
@@ -50,8 +51,7 @@ export default function Home({ user, go }: { user: User | null; go: Go }) {
 
   return (
     <main className="flush">
-      <section className="hero fullbleed">
-        <div className="in">
+      <Scene art={ART.hero} size="wide" className="hero">
           {active ? <>
             <span className="caps">Незавершённая сессия{lastAt && ` · ${dayLabel(lastAt)}`}</span>
             <h1>{active.card.name}</h1>
@@ -71,19 +71,18 @@ export default function Home({ user, go }: { user: User | null; go: Go }) {
                 : <button className="primary" onClick={() => go({ name: "test" })}>Пройти входной тест<Icon name="arrow" size={16} /></button>}
             </div>
           </>}
-        </div>
-      </section>
+      </Scene>
 
       <div className="home">
         <div>
           <div className="lh">
-            <div><h2>Сценарии</h2><div className="cap">{items.length} {plural(items.length, "сценарий", "сценария", "сценариев")}{passedCount > 0 && ` · ${passedCount} пройдено`}</div></div>
+            <div className="lt"><Art className="mag" src={ART.magnet} /><div><h2>Сценарии</h2><div className="cap">{items.length} {plural(items.length, "сценарий", "сценария", "сценариев")}{passedCount > 0 && ` · ${passedCount} пройдено`}</div></div></div>
             <button onClick={() => go({ name: "setup" })}><Icon name="plus" size={16} />Новый сценарий</button>
           </div>
           {err && <p className="error">{err}</p>}
           {groups.map(([domain, list]) => (
             <section key={domain} className="group">
-              <div className="gh"><span className="tile"><Icon name={DOMAIN_ICON[domain] ?? "chat"} size={20} /></span><b>{domain || "Без сферы"}</b><span className="cap">{list.length} {plural(list.length, "сценарий", "сценария", "сценариев")}</span></div>
+              <div className="gh"><GroupArt domain={domain} /><b>{domain || "Без сферы"}</b><span className="cap">{list.length} {plural(list.length, "сценарий", "сценария", "сценариев")}</span></div>
               {list.map((s) => {
                 const cont = active?.scenario_id === s.id ? active : null;
                 const done = passed(s.id);
@@ -130,12 +129,18 @@ export default function Home({ user, go }: { user: User | null; go: Go }) {
             <button className="link" onClick={() => go({ name: "test" })}>{test ? "Пройти заново" : "Пройти тест"}</button>
             <img src={MASCOT} alt="" />
           </div>
-          {hist.length > 0 && (
-            <div className="card recent">
-              <h3>{user ? "Последние сессии" : "Ваши последние сессии"}</h3>
-              {hist.slice(0, 5).map((h) => <SessionRow key={h.id} h={h} go={go} />)}
-            </div>
-          )}
+          {hist.length > 0
+            ? (
+              <div className="card recent">
+                <h3>{user ? "Последние сессии" : "Ваши последние сессии"}</h3>
+                {hist.slice(0, 5).map((h) => <SessionRow key={h.id} h={h} go={go} />)}
+                <div className="rfoot">
+                  <button className="link" onClick={() => go({ name: "history" })}>Вся история</button>
+                  <Art className="folders" src={ART.folders} />
+                </div>
+              </div>
+            )
+            : <div className="recent"><Empty art={ART.coffee} title="Сессий пока нет"><p>Начните любой сценарий: здесь появятся последние сессии и ссылки на разборы.</p></Empty></div>}
         </div>
       </div>
     </main>

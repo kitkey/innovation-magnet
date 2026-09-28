@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { HintOut, ScenarioCard, store } from "./api";
+import { Art, ART } from "./art";
 
 export const MASCOT = "/mascot/mascot.png";
 const METHOD_RU: Record<ScenarioCard["method"], string> = { spin: "по методу SPIN", harvard: "по Гарвардскому методу", batna: "по методу BATNA", free: "общее" };
@@ -53,7 +54,7 @@ export function CoachPanel({ tips, method, intro, onDone }: PanelProps) {
   const last = i >= tips.length - 1;
   return (
     <section className={`coach ${intro ? "intro" : "modal"}`} aria-label="Наставления перед переговорами" onClick={intro ? undefined : (e) => { if (e.target === e.currentTarget) onDone(); }}>
-      {intro && <div className="empty"><svg className="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>Собеседник начнёт первым, когда вы прочитаете наставления.</div>}
+      {intro && <div className="empty"><Art className="hg" src={ART.hourglass} fallback={<svg className="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>} /><span><b>Переписка пока пуста</b>Собеседник начнёт первым, когда вы прочитаете наставления.</span></div>}
       <div className="crow">
         <img className="coach-mascot" src={MASCOT} alt="" />
         <div className="coach-bubble">

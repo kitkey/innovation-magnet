@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, fmtValue, SessionResult, SessionView, store, unitParts } from "./api";
+import { ART, Scene } from "./art";
 import { Icon } from "./icons";
 import { ACTIVE_KEY, cap, dayLabel, Go, hhmm, Marks, meters, OUTCOME, outcomeTone, parseAt, sessionScore, startScenario, turnStates } from "./shared";
 
@@ -22,6 +23,14 @@ const AXIS_WHY: Record<string, string> = {
   "контроль эмоций": "Сохраняли спокойный тон под давлением",
 };
 
+/** Сценка исхода: рукопожатие только там, где договорились. */
+function outcomeArt(outcome: string | null): string {
+  if (outcome === "agreement_in_zone" || outcome === "agreement_out_of_zone") return ART.agree;
+  if (outcome === "breakdown") return ART.breakdown;
+  if (outcome === "walk_away") return ART.walkaway;
+  return ART.hero;
+}
+
 const norm = (t: string) => t.toLowerCase().replace(/ё/g, "е").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 
 /** Доверие и готовность уступить по ходам, 0–100. Отметка — ход первого ключевого момента. */
@@ -34,9 +43,9 @@ function Spark({ trust, ready, mark }: { trust: number[]; ready: number[]; mark:
   const series: [number[], string, string, string | undefined][] = [[trust, "var(--accent)", "Доверие", undefined], [ready, "#3AA8E0", "Готовность уступить", "5 3"]];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Доверие: ${trust.join(", ")}. Готовность уступить: ${ready.join(", ")}.`}>
-      {[0, 50, 100].map((v) => <g key={v}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--line-2)" /><text x={L - 6} y={y(v) + 3} textAnchor="end" fontSize="9" fill="var(--muted)">{v}</text></g>)}
-      {trust.map((_, i) => <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--muted)">{i}</text>)}
-      {mark !== null && mark <= n && <g><line x1={x(mark)} x2={x(mark)} y1={T} y2={H - B} stroke="var(--bad)" strokeDasharray="3 3" /><text x={x(mark) + 4} y={T + 8} fontSize="9" fill="var(--bad)">ход {mark}</text></g>}
+      {[0, 50, 100].map((v) => <g key={v}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--line-2)" /><text x={L - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#59617D">{v}</text></g>)}
+      {trust.map((_, i) => <text key={i} x={x(i)} y={H - 5} textAnchor="middle" fontSize="11" fill="#59617D">{i}</text>)}
+      {mark !== null && mark <= n && <g><line x1={x(mark)} x2={x(mark)} y1={T} y2={H - B} stroke="var(--bad)" strokeDasharray="3 3" /><text x={x(mark) + 4} y={T + 9} fontSize="11" fill="var(--bad)">ход {mark}</text></g>}
       {series.map(([vs, c, name, dash]) => (
         <g key={name}>
           <path d={path(vs)} fill="none" stroke={c} strokeWidth="2" strokeDasharray={dash} strokeLinejoin="round" strokeLinecap="round" />
@@ -87,8 +96,7 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
 
   return (
     <main className="flush">
-        <section className={`rhero fullbleed ${r.outcome === "agreement_in_zone" ? "art" : ""}`}>
-          <div className="in">
+        <Scene key={r.outcome ?? r.status} art={outcomeArt(r.status === "active" ? null : r.outcome)} size="wide" className="rhero">
             <div className="crumb">Разбор{card && ` · ${card.name}`}{times[0] && ` · ${dayLabel(times[0])}`}</div>
             <span className={`omark ${tone}`}><span className="dot" />Исход</span>
             <h1>{title}</h1>
@@ -115,8 +123,7 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
                 : s && <button className="primary" onClick={() => startScenario(s.scenario_id, go, setErr)}><Icon name="replay" size={16} />Сыграть заново</button>}
               <button onClick={() => go({ name: "list" })}>К сценариям</button>
             </div>
-          </div>
-        </section>
+        </Scene>
 
         <div className="rgrid">
           <aside>
@@ -125,7 +132,7 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
                 <span className="caps">Динамика</span>
                 <h2>Доверие и готовность уступить</h2>
                 <Spark trust={series.map((x) => x.trust)} ready={series.map((x) => x.readiness)} mark={firstBad != null ? firstBad + 1 : null} />
-                <div className="legend"><span><i style={{ background: "var(--accent)" }} />Доверие</span><span><i style={{ background: "#3AA8E0" }} />Готовность уступить, пунктир</span><span className="muted">по ходам, %</span></div>
+                <div className="legend"><span><i style={{ background: "var(--accent)" }} />Доверие</span><span><i className="dash" />Готовность уступить</span><span className="muted">по ходам, %</span></div>
               </div>
             )}
             {r.judge && (
