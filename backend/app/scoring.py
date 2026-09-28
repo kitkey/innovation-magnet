@@ -5,6 +5,7 @@
 Рейтинг пользователя = среднее по его лучшим TOP_N сессиям за период: сессии разной сложности сравниваются через множитель,
 а число попыток не даёт преимущества само по себе.
 """
+import math
 from datetime import datetime, timedelta, timezone
 
 from .config import settings
@@ -29,6 +30,37 @@ def session_score(axes: dict[str, int] | None, difficulty: str, outcome: str | N
 def user_rating(scores: list[float]) -> float | None:
     best = sorted(scores, reverse=True)[:TOP_N]
     return round(sum(best) / len(best), 1) if best else None
+
+
+MEDALS = ("gold", "silver", "bronze")
+
+
+def medal_split(slots: int, gold_share: float, silver_share: float) -> dict[str, int]:
+    """Сколько золота, серебра и бронзы на slots мест. Округление к ближайшему (0,5 вверх), при ненулевой доле золота минимум одно золото."""
+    if slots <= 0:
+        return dict.fromkeys(MEDALS, 0)
+    gold = min(slots, math.floor(slots * gold_share + 0.5))
+    if gold == 0 and gold_share > 0:
+        gold = 1
+    silver = min(slots - gold, math.floor(slots * silver_share + 0.5))
+    return {"gold": gold, "silver": silver, "bronze": slots - gold - silver}
+
+
+def medal_for_place(place: int, split: dict[str, int]) -> str | None:
+    """Медаль для места (с нуля) в рейтинге, отсортированном по убыванию."""
+    edge = 0
+    for m in MEDALS:
+        edge += split[m]
+        if place < edge:
+            return m
+    return None
+
+
+def place_medals(rated: int, slots: int, gold_share: float, silver_share: float) -> list[str | None]:
+    """Медали по местам рейтинга. Если людей с рейтингом меньше, чем мест, доли считаются от числа людей:
+    иначе при 10 местах и 20% золота двое участников получили бы по золоту."""
+    split = medal_split(min(slots, rated), gold_share, silver_share)
+    return [medal_for_place(i, split) for i in range(rated)]
 
 
 def aware(dt: datetime) -> datetime:

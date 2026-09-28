@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, AUTH_KEY, Board, MemberStats, MODE_KEY, Org, Period, store, User } from "./api";
+import { api, AUTH_KEY, Board, MemberStats, MODE_KEY, Org, Period, Season, store, User } from "./api";
+import { fmtDate, MedalDot, MedalTally, MEDAL_RU, ProfileMedals, ruleText, SeasonPanel, seasonTitle } from "./medals";
 
 export type SetUser = (u: User | null) => void;
 
 const PERIOD_RU: [Period, string][] = [["week", "Неделя"], ["month", "Месяц"], ["all", "Всё время"]];
+const PERIOD_SEASON_RU: [Period, string][] = [["week", "Неделя"], ["month", "Месяц"], ["all", "Весь сезон"]];
 const ROLE_RU: Record<User["role"], string> = { member: "участник", org_admin: "администратор" };
 
 export function UserIcon() {
@@ -93,6 +95,7 @@ export function Profile({ user, onUser }: { user: User; onUser: SetUser }) {
           </>
         )}
       </section>
+      <ProfileMedals />
       {msg && <p className="note">{msg}</p>}
       {err && <p className="error">{err}</p>}
       <button className="link" onClick={logout}>Выйти</button>
@@ -114,7 +117,7 @@ function leaders(members: MemberStats[]) {
 
 export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => void }) {
   const [period, setPeriod] = useState<Period>("month");
-  const [data, setData] = useState<{ org: Org; members: MemberStats[] } | null>(null);
+  const [data, setData] = useState<{ org: Org; season: Season; members: MemberStats[] } | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const load = () => api.orgStats(period).then(setData).catch((e) => setErr(`Кабинет не загрузился: ${e.message}`));
@@ -141,7 +144,11 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
         </div>
         <p className="small muted">Сотрудник вводит код в профиле. Старый код после выпуска нового перестаёт работать.</p>
       </section>
-      <Tabs value={period} options={PERIOD_RU} onChange={setPeriod} />
+      <SeasonPanel onChanged={load} />
+      <div className="row between">
+        <Tabs value={period} options={PERIOD_SEASON_RU} onChange={setPeriod} />
+        <span className="small muted">{seasonTitle(data.season.name)}, с {fmtDate(data.season.started_at)}</span>
+      </div>
       {err && <p className="error">{err}</p>}
       {best.length > 0 && (
         <section className="panel">
@@ -184,21 +191,28 @@ export function Leaderboard({ user }: { user: User | null }) {
       <h2>Лидерборд</h2>
       <div className="row between">
         <Tabs value={scope} options={user?.org_id ? [["org", user.org_name ?? "Организация"], ["global", "Общий"]] : [["global", "Общий"]]} onChange={setScope} />
-        <Tabs value={period} options={PERIOD_RU} onChange={setPeriod} />
+        <Tabs value={period} options={scope === "org" ? PERIOD_SEASON_RU : PERIOD_RU} onChange={setPeriod} />
       </div>
+      {scope === "org" && board?.season && board.medal_rule && (
+        <p className="small muted">{seasonTitle(board.season.name)}, с {fmtDate(board.season.started_at)}. {ruleText(board.medal_rule)}
+          {board.medal_rule.slots > 0 && " Метка у места показывает, какую медаль участник получит, если сезон закроют сейчас."}</p>
+      )}
       {err && <p className="error">{err}</p>}
       {board && (board.rows.length ? (
         <div className="table-wrap">
           <table>
             <thead><tr><th>#</th><th>Участник</th>{scope === "global" && <th>Организация</th>}<th>Рейтинг</th><th>Сессий с оценкой</th></tr></thead>
             <tbody>{board.rows.map((r, i) => (
-              <tr key={i} className={r.me ? "me" : ""}><td>{i + 1}</td><td>{r.display_name}</td>{scope === "global" && <td>{r.org_name ?? "—"}</td>}<td>{r.rating}</td><td>{r.sessions}</td></tr>
+              <tr key={i} className={r.me ? "me" : ""}>
+                <td className="place">{i + 1}{r.medal && <MedalDot medal={r.medal} title={`${MEDAL_RU[r.medal]}, если закрыть сезон сейчас`} />}</td>
+                <td>{r.display_name}<MedalTally counts={r.medals} /></td>{scope === "global" && <td>{r.org_name ?? "—"}</td>}<td>{r.rating}</td><td>{r.sessions}</td>
+              </tr>
             ))}</tbody>
           </table>
         </div>
       ) : <p className="muted">За этот период оценённых сессий нет.</p>)}
       <p className="small muted">Очко сессии: средняя оценка судьи по осям × сложность (лёгкая 0,8, средняя 1,0, сложная 1,25) + 10 за соглашение в целевой зоне.
-        Рейтинг: среднее по {board?.top_n ?? 5} лучшим сессиям за период. {scope === "global" && "В общем лидерборде только те, кто разрешил это в профиле."}</p>
+        Рейтинг: среднее по {board?.top_n ?? 5} лучшим сессиям за период{scope === "org" ? " внутри сезона" : ""}. Цифры у имени — медали за прошлые сезоны. {scope === "global" && "В общем лидерборде только те, кто разрешил это в профиле."}</p>
     </main>
   );
 }

@@ -1,4 +1,4 @@
-:root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280; --accent: #2f5bea; --line: #e3e6ec; }
+:root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280; --accent: #2f5bea; --line: #e3e6ec; --gold: #c9a227; --silver: #a3acb7; --bronze: #b07044; }
 * { box-sizing: border-box; }
 html, body { overflow-x: hidden; }
 body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
@@ -99,3 +99,15 @@ label.file input { display: none; }
 .brief dt { color: var(--muted); }
 .brief dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) { .brief dl { grid-template-columns: minmax(0, 1fr); } .brief dd { margin-bottom: 4px; } }
+.medal { flex: none; vertical-align: -1px; }
+.medal circle { stroke: rgba(29, 35, 48, .35); stroke-width: 1; }
+.medal.gold circle { fill: var(--gold); }
+.medal.silver circle { fill: var(--silver); }
+.medal.bronze circle { fill: var(--bronze); }
+td.place { white-space: nowrap; }
+td.place .medal { margin-left: 6px; }
+.medal-tally { display: inline-flex; gap: 8px; margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.medal-tally span { display: inline-flex; align-items: center; gap: 3px; }
+.medal-list li { display: flex; gap: 8px; align-items: baseline; }
+.medal-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .medal-form { grid-template-columns: minmax(0, 1fr); } }

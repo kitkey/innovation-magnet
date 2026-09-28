@@ -45,7 +45,16 @@ export type MemberStats = {
   id: string; login: string; display_name: string; role: User["role"]; sessions: number; training_minutes: number;
   axes: Record<string, number>; in_zone_share: number | null; rating: number | null;
 };
-export type Board = { scope: "org" | "global"; period: Period; top_n: number; rows: { display_name: string; org_name: string | null; rating: number; sessions: number; me: boolean }[] };
+export type Medal = "gold" | "silver" | "bronze";
+export type MedalCounts = Record<Medal, number>;
+export type Season = { id: number; name: string; started_at: string; awarded: boolean };
+export type MedalRule = { slots: number; gold_share: number; silver_share: number; split: MedalCounts };
+export type SeasonState = { season: Season; medal_rule: MedalRule; history: (Season & { ended_at: string | null; medals: MedalCounts })[] };
+export type Award = { medal: Medal; rank: number; rating: number; season_name: string; org_name: string; awarded_at: string };
+export type Board = {
+  scope: "org" | "global"; period: Period; top_n: number; season?: Season; medal_rule?: MedalRule;
+  rows: { display_name: string; org_name: string | null; rating: number; sessions: number; me: boolean; medals: MedalCounts; medal: Medal | null }[];
+};
 
 export type TurnOut = {
   turn: number;
@@ -171,7 +180,11 @@ export const api = {
   setMemberRole: (id: string, role: User["role"]) => call<{ id: string; role: User["role"] }>(`/api/orgs/me/members/${id}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   removeMember: (id: string) => call<{ ok: boolean }>(`/api/orgs/me/members/${id}`, { method: "DELETE" }),
   leaveOrg: () => call<User>("/api/orgs/me/leave", { method: "POST" }),
-  orgStats: (period: Period) => call<{ org: Org; period: Period; members: MemberStats[] }>(`/api/orgs/me/stats?period=${period}`),
+  orgStats: (period: Period) => call<{ org: Org; period: Period; season: Season; members: MemberStats[] }>(`/api/orgs/me/stats?period=${period}`),
+  season: () => call<SeasonState>("/api/orgs/me/season"),
+  setMedals: (medal_slots: number, gold_share: number, silver_share: number) => call<SeasonState>("/api/orgs/me/medals", { method: "PUT", body: JSON.stringify({ medal_slots, gold_share, silver_share }) }),
+  closeSeason: (award: boolean, reset: boolean, next_name: string) => call<SeasonState & { awarded: { display_name: string; medal: Medal; rank: number; rating: number }[] }>("/api/orgs/me/season/close", { method: "POST", body: JSON.stringify({ award, reset, next_name }) }),
+  myMedals: () => call<Award[]>("/api/profile/medals"),
   voiceTurn: (sid: string, audio: Blob, name: string) => { const f = new FormData(); f.append("audio", audio, name); return call<VoiceTurnOut>(`/api/sessions/${sid}/voice`, { method: "POST", body: f }, false); },
   voiceStatus: () => call<VoiceStatus>("/api/voice/status"),
   tts: (text: string, emotion: Mood, voice: ScenarioCard["voice"]) => call<Speech>("/api/tts", { method: "POST", body: JSON.stringify({ text, emotion, voice }) }),
