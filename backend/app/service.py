@@ -204,8 +204,22 @@ def view(row: SessionRow) -> dict:
         "turn": row.turn, "max_turns": card.max_turns, "state": row.state, "mood": voice.mood_for(card, OpponentState(**row.state), row.outcome),
         "thresholds": {"concede": diff["concede_threshold"], "breakdown_irritation": diff["breakdown_irritation"], "breakdown_trust": rules.BREAKDOWN_TRUST},
         "coach": [h.model_dump() for h in hints.coach(card, from_org)],
-        "messages": [{"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", []), "audio_url": t.audio_url} for t in row.turns],
+        "initial_state": rules.initial_state(card).model_dump(),
+        "messages": _messages(card, row),
     }
+
+
+def _messages(card: ScenarioCard, row: SessionRow) -> list[dict]:
+    """Реплики с временем; у хода игрока — счётчики после него, пересчитанные правилами, как при перемотке."""
+    state, out = rules.initial_state(card), []
+    for t in row.turns:
+        m = {"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", []), "audio_url": t.audio_url,
+             "at": t.created_at.isoformat() if t.created_at else None}
+        if t.role == "user" and t.analysis:
+            state, _ = rules.apply_move(card, state, MoveAnalysis(**t.analysis))
+            m["state"] = state.model_dump()
+        out.append(m)
+    return out
 
 
 def _norm(text: str) -> str:

@@ -95,7 +95,9 @@ export type SessionResult = {
   judge_source: "llm" | "rules" | null;
 };
 
-export type Message = { role: "user" | "opponent"; text: string; labels: string[]; audio_url?: string | null; pending?: boolean };
+export type Message = { role: "user" | "opponent"; text: string; labels: string[]; audio_url?: string | null; pending?: boolean; at?: string | null; state?: TurnOut["state"]; hint?: boolean };
+
+export type HistoryItem = { id: string; scenario: string; scenario_id?: string; status: string; outcome: string | null; turns: number; created_at?: string | null; score?: number | null };
 
 export type SessionView = {
   id: string;
@@ -106,6 +108,7 @@ export type SessionView = {
   turn: number;
   max_turns: number;
   state: TurnOut["state"];
+  initial_state?: TurnOut["state"];
   thresholds: { concede: number; breakdown_irritation: number; breakdown_trust: number };
   mood: Mood;
   coach: HintOut[];
@@ -176,7 +179,7 @@ export const api = {
     guestSessions.add(v.id);
     return v;
   },
-  history: () => call<{ id: string; scenario: string; status: string; outcome: string | null; turns: number }[]>(store.get(AUTH_KEY) ? "/api/sessions" : `/api/sessions?ids=${guestSessions.all().join(",")}`),
+  history: () => call<HistoryItem[]>(store.get(AUTH_KEY) ? "/api/sessions" : `/api/sessions?ids=${guestSessions.all().join(",")}`),
   register: (login: string, password: string, display_name: string) => call<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: JSON.stringify({ login, password, display_name }) }),
   login: (login: string, password: string) => call<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   logout: () => call<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),

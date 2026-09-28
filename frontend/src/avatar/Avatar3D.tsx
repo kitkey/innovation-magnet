@@ -14,11 +14,11 @@ GLTFLoader.prototype.parse = function (this: GLTFLoader, ...args: Parameters<GLT
 };
 
 export type Say = { id: number; text: string; mood: Mood };
-type Props = { url: string; gender: ScenarioCard["voice"]; mood: Mood; say: Say | null; ttsReady: boolean; onFail: (msg: string) => void };
+type Props = { url: string; gender: ScenarioCard["voice"]; mood: Mood; say: Say | null; ttsReady: boolean; onFail: (msg: string) => void; onSpeaking?: (on: boolean) => void };
 
 // Собеседник в 3D: TalkingHead + русский липсинк. Озвучка от бэка (Yandex TTS с таймингами слов),
 // без неё — беззвучная тишина той же длины и тайминги по длине слов, текст показывается субтитром.
-export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail }: Props) {
+export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail, onSpeaking }: Props) {
   const node = useRef<HTMLDivElement>(null);
   const head = useRef<TalkingHead | null>(null);
   const pending = useRef<Say | null>(null);
@@ -40,7 +40,7 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail }: P
     h.showAvatar({ url, body: gender === "male" ? "M" : "F", avatarMood: mood, lipsyncLang: "ru" }, (ev) => { if (ev.lengthComputable) setProgress(Math.round((100 * ev.loaded) / ev.total)); })
       .then(() => { if (alive) setReady(true); })
       .catch((e) => { if (alive) onFail(`3D-модель не загрузилась: ${e?.message ?? e}`); });
-    return () => { alive = false; setReady(false); head.current = null; try { h.dispose(); } catch { /* уже остановлен */ } };
+    return () => { alive = false; setReady(false); onSpeaking?.(false); head.current = null; try { h.dispose(); } catch { /* уже остановлен */ } };
   }, [url, gender]);
 
   useEffect(() => { if (ready) try { head.current?.setMood(mood); } catch { /* неизвестное настроение — оставляем прежнее */ } }, [mood, ready]);
@@ -67,9 +67,10 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail }: P
       audio = h.audioCtx.createBuffer(1, Math.ceil((h.audioCtx.sampleRate * est.total) / 1000), h.audioCtx.sampleRate);
     }
     setSubtitle(s.text);
+    onSpeaking?.(true);
     h.stopSpeaking();
     h.speakAudio({ audio, ...timing }, { lipsyncLang: "ru" });
-    window.setTimeout(() => { if (spoken.current === s.id) { setSubtitle(""); setBusy(false); } }, audio.duration * 1000 + 800);
+    window.setTimeout(() => { if (spoken.current === s.id) { setSubtitle(""); setBusy(false); onSpeaking?.(false); } }, audio.duration * 1000 + 800);
   };
 
   useEffect(() => {
@@ -84,8 +85,8 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail }: P
       {!ready && <div className="avatar-over muted small">Загружаем 3D-собеседника… {progress > 0 && `${progress}%`}</div>}
       {busy && !subtitle && <div className="avatar-over muted small">Готовит ответ…</div>}
       {subtitle && <div className="subtitle">{subtitle}</div>}
-      {note && <p className="small muted avatar-note">{note}</p>}
-      {!ttsReady && ready && <p className="small muted avatar-note">Озвучка не настроена: собеседник двигает губами без звука.</p>}
+      {note && !subtitle && <p className="small muted avatar-note">{note}</p>}
+      {!ttsReady && ready && !subtitle && <p className="small muted avatar-note">Озвучка не настроена: собеседник двигает губами без звука.</p>}
     </div>
   );
 }

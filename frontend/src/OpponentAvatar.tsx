@@ -15,9 +15,9 @@ class Guard extends Component<{ onError: (msg: string) => void; children: ReactN
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-type Props = { role: string; mode: OpponentMode; avatarUrl: string | null; gender: ScenarioCard["voice"]; mood: Mood; say: Say | null; ttsReady: boolean };
+type Props = { role: string; mode: OpponentMode; avatarUrl: string | null; gender: ScenarioCard["voice"]; mood: Mood; say: Say | null; ttsReady: boolean; onSpeaking?: (on: boolean) => void };
 
-export default function OpponentAvatar({ role, mode, avatarUrl, gender, mood, say, ttsReady }: Props) {
+export default function OpponentAvatar({ role, mode, avatarUrl, gender, mood, say, ttsReady, onSpeaking }: Props) {
   const [failed, setFailed] = useState("");
   if (mode === "text") return <div className="avatar-slot" data-slot="opponent-avatar">{role}</div>;
   const reason = failed || (webglAvailable() ? "" : "3D недоступен в этом браузере (нет WebGL)");
@@ -25,7 +25,7 @@ export default function OpponentAvatar({ role, mode, avatarUrl, gender, mood, sa
   return (
     <Guard onError={setFailed}>
       <Suspense fallback={<div className="avatar-slot">Загружаем 3D…</div>}>
-        <Avatar3D url={avatarUrl || DEFAULT_AVATAR} gender={gender} mood={mood} say={say} ttsReady={ttsReady} onFail={setFailed} />
+        <Avatar3D url={avatarUrl || DEFAULT_AVATAR} gender={gender} mood={mood} say={say} ttsReady={ttsReady} onFail={setFailed} onSpeaking={onSpeaking} />
       </Suspense>
     </Guard>
   );

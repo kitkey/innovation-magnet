@@ -188,3 +188,15 @@ def test_guard_allows_echoing_user_number_with_own_position():
     assert service._guard_reply(ALABUGA, state, "Скидка 2% нам не подходит. Мы готовы остановиться на 4,75%.", msg)
     assert not service._guard_reply(ALABUGA, state, "Хорошо, пусть будет 2%.", msg)
     assert not service._guard_reply(ALABUGA, state, "Могу 3%, а не 4,75%.", msg)
+
+
+def test_session_view_has_per_turn_state_and_times(client):
+    sid = client.post("/api/sessions", params={"scenario_id": "deadline-with-manager"}).json()["session_id"]
+    states = [client.post(f"/api/sessions/{sid}/turn", json={"message": m}).json()["state"]
+              for m in ["Понимаю вашу позицию. Что для вас важно?", "Это не обсуждается."]]
+    s = client.get(f"/api/sessions/{sid}").json()
+    assert s["initial_state"]["position"] == DEADLINE.target_zone.opponent_start
+    assert [m["state"] for m in s["messages"] if m["role"] == "user"] == states
+    assert all(m["at"] for m in s["messages"])
+    listed = next(x for x in client.get("/api/sessions", params={"ids": sid}).json() if x["id"] == sid)
+    assert listed["scenario_id"] == "deadline-with-manager" and listed["created_at"] and listed["score"] is None

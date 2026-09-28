@@ -11,11 +11,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import llm, service, voice
+from . import llm, scoring, service, voice
 from .accounts import WRITE_LOCK, current_user, router as accounts_router
 from .config import settings
 from .db import ScenarioRow, SessionLocal, SessionRow, UserRow, get_db, init_db
-from .schemas import RewindIn, Scenario, ScenarioBrief, ScenarioCard, SessionResult, TtsIn, TurnIn, TurnOut, VoiceTurnOut
+from .engine import rules
+from .schemas import OpponentState, RewindIn, Scenario, ScenarioBrief, ScenarioCard, SessionResult, TtsIn, TurnIn, TurnOut, VoiceTurnOut
 from .seeds import SEEDS
 
 
@@ -256,7 +257,17 @@ def list_sessions(ids: str = "", db=Depends(get_db), user: UserRow | None = Depe
         known = [i for i in ids.split(",") if i][:50]
         q = db.query(SessionRow).filter(SessionRow.user_id.is_(None), SessionRow.id.in_(known))
     rows = q.order_by(SessionRow.created_at.desc()).limit(50)
-    return [{"id": r.id, "scenario": r.card["name"], "status": r.status, "outcome": r.outcome, "turns": r.turn} for r in rows]
+    return [{"id": r.id, "scenario": r.card["name"], "scenario_id": r.scenario_id, "status": r.status, "outcome": r.outcome, "turns": r.turn,
+             "created_at": r.created_at.isoformat() if r.created_at else None, "score": _score(r)} for r in rows]
+
+
+def _score(r: SessionRow) -> float | None:
+    """Очко сессии для списка: только если судья уже разобрал её."""
+    if not r.judge:
+        return None
+    card = ScenarioCard(**r.card)
+    ok = r.outcome == "walk_away" and rules.walk_away_justified(card, OpponentState(**r.state).position)
+    return scoring.session_score(r.judge.get("axes"), card.difficulty, r.outcome, ok)
 
 
 mimetypes.add_type("model/gltf-binary", ".glb")
