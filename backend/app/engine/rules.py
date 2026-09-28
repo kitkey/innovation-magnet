@@ -42,6 +42,7 @@ DIFFICULTY = {
     "hard": {"concede_threshold": 5, "breakdown_irritation": 5, "limit_share": 0.0},
 }
 
+BREAKDOWN_TRUST = -6
 CONCESSION_STEPS = 4
 EARLY_END = ("agreement_in_zone", "agreement_out_of_zone", "walk_away", "breakdown")
 
@@ -131,7 +132,7 @@ def decide_outcome(card: ScenarioCard, state: OpponentState, move: MoveAnalysis,
     if "walk_away" in move.labels:
         return "walk_away", None
     diff = DIFFICULTY[card.difficulty]
-    if state.irritation >= diff["breakdown_irritation"] or state.trust <= -6:
+    if state.irritation >= diff["breakdown_irritation"] or state.trust <= BREAKDOWN_TRUST:
         return "breakdown", None
     z = card.target_zone
     value = move.proposed_value if move.proposed_value is not None and is_plausible(card, move.proposed_value) else None

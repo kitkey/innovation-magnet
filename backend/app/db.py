@@ -103,6 +103,7 @@ class SessionRow(Base):
     turn: Mapped[int] = mapped_column(Integer, default=0)
     judge: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    hints_fired: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     turns: Mapped[list["TurnRow"]] = relationship(back_populates="session", order_by="TurnRow.id")
 
@@ -119,7 +120,7 @@ class TurnRow(Base):
     session: Mapped[SessionRow] = relationship(back_populates="turns")
 
 
-ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)"},
+ADDED_COLUMNS = {"sessions": {"user_id": "VARCHAR(32)", "hints_fired": "JSON"},
                  "orgs": {"medal_slots": "INTEGER NOT NULL DEFAULT 10", "gold_share": "FLOAT NOT NULL DEFAULT 0.2", "silver_share": "FLOAT NOT NULL DEFAULT 0.3"},
                  "scenarios": {"org_id": "VARCHAR(32)", "owner_id": "VARCHAR(32)", "edit_key": "VARCHAR(64)"}, "turns": {"audio_url": "VARCHAR(200)"}}
 

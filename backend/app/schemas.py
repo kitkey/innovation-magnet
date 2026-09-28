@@ -1,4 +1,5 @@
-from typing import Literal
+import re
+from typing import Literal, get_args
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -66,6 +67,33 @@ class TargetZone(BaseModel):
         return f"{value:g}%" if self.short_unit == "%" else f"{value:g} {self.short_unit}"
 
 
+MOVE_LABELS = set(get_args(MoveLabel))
+HINT_WHEN = re.compile(r"^(label:(?P<label>[a-z_]+)|missing:(?P<missing>[a-z_]+)@(?P<at>\d{1,2})|irritation_high|trust_low|readiness_high|turns_left:(?P<left>\d{1,2}))$")
+
+
+class Hint(BaseModel):
+    """Подсказка маскота по ходу диалога: условие и текст. Условия считаются на сервере по разметке ходов и счётчикам, без LLM."""
+    when: str = Field(description="label:<метка> | missing:<метка>@<ход> | irritation_high | trust_low | readiness_high | turns_left:<N>")
+    text: str = Field(min_length=1, max_length=300)
+
+    @field_validator("when")
+    @classmethod
+    def _when(cls, v: str) -> str:
+        v = v.strip()
+        m = HINT_WHEN.match(v)
+        if not m:
+            raise ValueError(f"Неизвестное условие подсказки: {v}")
+        label = m.group("label") or m.group("missing")
+        if label and label not in MOVE_LABELS:
+            raise ValueError(f"Неизвестная метка хода в условии подсказки: {label}")
+        return v
+
+
+class HintOut(BaseModel):
+    text: str
+    source: Literal["org", "author", "standard"]
+
+
 class ScenarioCard(BaseModel):
     name: str = Field(min_length=1)
     domain: str
@@ -77,6 +105,8 @@ class ScenarioCard(BaseModel):
     user_role: str = Field(min_length=1)
     user_goal: str = Field(min_length=1)
     opponent_role: str = Field(min_length=1)
+    opponent_name: str = Field(default="", max_length=80, description="вымышленные имя и фамилия собеседника, пол совпадает с голосом voice; "
+                               "не имя реального известного человека")
     opponent_goal: str = Field(min_length=1)
     opponent_hidden_interests: list[str]
     opponent_batna: str
@@ -90,6 +120,13 @@ class ScenarioCard(BaseModel):
     locked_by_org: bool = False
     voice: Literal["female", "male"] = Field(default="female", description="голос собеседника в режиме 3D и голос")
     avatar_url: str | None = Field(default=None, pattern=AVATAR_URL, description="GLB-аватар собеседника; при генерации карточки не заполняй")
+    coach_tips: list[str] = Field(default_factory=list, max_length=8, description="наставления игроку перед стартом от автора сценария; при генерации карточки оставь пустым")
+    hints: list[Hint] = Field(default_factory=list, max_length=20, description="подсказки по условиям от автора сценария; при генерации карточки оставь пустым")
+
+    @field_validator("coach_tips", mode="before")
+    @classmethod
+    def _tips(cls, v):
+        return [t.strip()[:300] for t in v or [] if isinstance(t, str) and t.strip()]
 
     @field_validator("avatar_url", mode="before")
     @classmethod
@@ -134,6 +171,7 @@ class TurnOut(BaseModel):
     analysis: MoveAnalysis
     state: OpponentState
     mood: Mood = "neutral"
+    hints: list[HintOut] = Field(default_factory=list, description="подсказки маскота, сработавшие на этом ходу")
 
 
 class VoiceTurnOut(TurnOut):

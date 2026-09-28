@@ -1,7 +1,8 @@
 import { SyntheticEvent, useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile, UserIcon } from "./account";
-import { api, AUTH_KEY, editKeys, fmtValue, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, unitParts, User, VoiceStatus } from "./api";
+import { api, AUTH_KEY, editKeys, fmtValue, Hint, HintOut, Message, MODE_KEY, Scenario, ScenarioCard, SessionResult, SessionView, store, TurnOut, unitParts, User, VoiceStatus } from "./api";
 import type { Say } from "./avatar/Avatar3D";
+import { CoachCorner, CoachPanel, coachTips } from "./Coach";
 import { MicIcon } from "./icons";
 import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
 import Recorder from "./voice/Recorder";
@@ -37,10 +38,16 @@ const TEST_KEY = "arena.test";
 
 const EMPTY: ScenarioCard = {
   name: "", domain: "", topic: "", difficulty: "medium", tone: "neutral", method: "free", style: "hard",
-  user_role: "", user_goal: "", opponent_role: "", opponent_goal: "", opponent_hidden_interests: [],
+  user_role: "", user_goal: "", opponent_role: "", opponent_name: "", opponent_goal: "", opponent_hidden_interests: [],
   opponent_batna: "", user_batna: "", target_zone: { unit: "", user_start: 0, zone_min: 0, zone_max: 0, opponent_start: 0 },
   mandatory_details: [], context: "", opening: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null,
+  coach_tips: [], hints: [],
 };
+
+/** «Ирина Белозёрова · Руководитель отдела…»; без имени — только роль. */
+export function who(card: ScenarioCard): string {
+  return card.opponent_name?.trim() ? `${card.opponent_name.trim()} · ${card.opponent_role}` : card.opponent_role;
+}
 
 export default function App() {
   const [view, setView] = useState<View>(() => (store.get(TEST_KEY) ? { name: "list" } : { name: "test" }));
@@ -148,6 +155,57 @@ function AvatarField({ value, onChange }: { value: string | null; onChange: (url
   );
 }
 
+const HINT_LABELS = ["pressure", "concession", "personal_attack", "manipulation", "vague", "batna_reference", "boundary", "conditional_trade", "concrete_offer", "empathy", "interest_question", "objective_criterion"];
+const HINT_MISSING = ["interest_question", "objective_criterion", "batna_reference", "conditional_trade", "concrete_offer", "boundary", "empathy", "mandatory_detail", "spin_problem", "spin_implication", "spin_need_payoff"];
+const HINT_KINDS: [string, string][] = [
+  ...HINT_LABELS.map((l): [string, string] => [`label:${l}`, `В ходе игрока: ${LABEL_RU[l]}`]),
+  ...HINT_MISSING.map((l): [string, string] => [`missing:${l}`, `К ходу N ни разу не было: ${LABEL_RU[l]}`]),
+  ["irritation_high", "Собеседник на грани срыва"], ["trust_low", "Доверие упало"], ["readiness_high", "Собеседник почти готов уступить"],
+  ["turns_left", "Осталось N ходов или меньше"],
+];
+
+/** «missing:empathy@3» → вид условия «missing:empathy» и число 3. */
+function splitWhen(when: string): { kind: string; n: number } {
+  const m = when.match(/^(missing:[a-z_]+)@(\d+)$/) ?? when.match(/^(turns_left):(\d+)$/);
+  return m ? { kind: m[1], n: Number(m[2]) } : { kind: when, n: 0 };
+}
+
+function joinWhen(kind: string, n: number): string {
+  if (kind.startsWith("missing:")) return `${kind}@${n || 3}`;
+  if (kind === "turns_left") return `turns_left:${n || 2}`;
+  return kind;
+}
+
+function HintsField({ value, maxTurns, onChange }: { value: Hint[]; maxTurns: number; onChange: (v: Hint[]) => void }) {
+  const put = (i: number, h: Hint) => onChange(value.map((x, k) => (k === i ? h : x)));
+  return (
+    <fieldset className="hints-field"><legend>Подсказки по ходу диалога</legend>
+      <p className="small muted">Маскот покажет подсказку один раз, когда выполнится условие. Стандартные подсказки по методу работают всегда, ваши показываются первыми.</p>
+      {value.map((h, i) => {
+        const { kind, n } = splitWhen(h.when);
+        const needsN = kind.startsWith("missing:") || kind === "turns_left";
+        return (
+          <div key={i} className="hint-row">
+            <label>Когда
+              <div className="hint-when">
+                <select value={kind} onChange={(e) => put(i, { ...h, when: joinWhen(e.target.value, n) })}>
+                  {HINT_KINDS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                </select>
+                {needsN && <input type="number" min={1} max={maxTurns} value={n} aria-label="N" onChange={(e) => put(i, { ...h, when: joinWhen(kind, Number(e.target.value)) })} />}
+              </div>
+            </label>
+            <label>Текст подсказки<input value={h.text} maxLength={300} placeholder="Одна-две строки: что сделать иначе" onChange={(e) => put(i, { ...h, text: e.target.value })} /></label>
+            <button className="hint-del" title="Удалить подсказку" aria-label="Удалить подсказку" onClick={() => onChange(value.filter((_, k) => k !== i))}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        );
+      })}
+      {value.length < 20 && <button className="add" onClick={() => onChange([...value, { when: "label:concession", text: "" }])}>Добавить подсказку</button>}
+    </fieldset>
+  );
+}
+
 function lines(v: string) { return v.split("\n").map((x) => x.trim()).filter(Boolean); }
 
 function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go: Go }) {
@@ -160,12 +218,13 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
   const saveToken = (v: string) => { setToken(v); store.set("arena.adminToken", v.trim() || null); };
   const save = async () => {
     setErr("");
+    const clean = { ...card, coach_tips: (card.coach_tips ?? []).map((t) => t.trim()).filter(Boolean), hints: (card.hints ?? []).filter((h) => h.text.trim()) };
     try {
-      const s = scenario && !copy ? await api.updateScenario(scenario.id, card) : await api.createScenario(card);
+      const s = scenario && !copy ? await api.updateScenario(scenario.id, clean) : await api.createScenario(clean);
       await startScenario(s.id, go, setErr);
     } catch (e) { setErr((e as Error).message); }
   };
-  const gen = async () => { setErr(""); try { setCard(await api.generate(brief)); } catch (e) { setErr((e as Error).message); } };
+  const gen = async () => { setErr(""); try { const g = await api.generate(brief); setCard({ ...g, coach_tips: card.coach_tips, hints: card.hints }); } catch (e) { setErr((e as Error).message); } };
   const text = (k: keyof ScenarioCard, label: string, area = false) => (
     <label>{label}{area
       ? <textarea value={card[k] as string} onChange={(e) => set(k, e.target.value)} />
@@ -186,7 +245,9 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       {select("method", "Метод, который тренируем", [["free", "Свободный"], ["spin", "SPIN"], ["harvard", "Гарвардский"], ["batna", "BATNA"]])}
       {select("style", "Стиль собеседника", [["hard", "Жёсткий"], ["cooperative", "Сотрудничающий"], ["avoiding", "Уклоняющийся"], ["pressing", "Давящий"], ["emotional", "Эмоциональный"]])}
       {text("user_role", "Ваша роль")}{text("user_goal", "Ваша цель", true)}
-      {text("opponent_role", "Роль собеседника")}{text("opponent_goal", "Цель собеседника", true)}
+      {text("opponent_role", "Роль собеседника")}
+      <label>Имя собеседника<input value={card.opponent_name ?? ""} maxLength={80} placeholder="Вымышленные имя и фамилия; если пусто, в диалоге будет роль" onChange={(e) => set("opponent_name", e.target.value)} /></label>
+      {text("opponent_goal", "Цель собеседника", true)}
       <label>Скрытые интересы собеседника (по строке)<textarea value={card.opponent_hidden_interests.join("\n")} onChange={(e) => set("opponent_hidden_interests", lines(e.target.value))} /></label>
       {text("opponent_batna", "BATNA собеседника")}{text("user_batna", "Ваша BATNA")}
       <fieldset><legend>Целевая зона соглашения</legend>
@@ -203,6 +264,9 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
         onChange={(e) => set("opening", e.target.value)} /></label>
       {select("voice", "Голос собеседника в режиме «3D и голос»", [["female", "Женский"], ["male", "Мужской"]])}
       <AvatarField value={card.avatar_url} onChange={(v) => set("avatar_url", v)} />
+      <label>Наставления перед стартом (по строке)<textarea value={(card.coach_tips ?? []).join("\n")} placeholder="Маскот покажет их до первого хода, перед стандартными советами по методу"
+        onChange={(e) => set("coach_tips", e.target.value.split("\n"))} /></label>
+      <HintsField value={card.hints ?? []} maxTurns={card.max_turns} onChange={(v) => set("hints", v)} />
       <label>Лимит ходов<input type="number" value={card.max_turns} onChange={(e) => set("max_turns", Number(e.target.value))} /></label>
       <label className="check"><input type="checkbox" checked={card.locked_by_org} onChange={(e) => set("locked_by_org", e.target.checked)} />Зафиксировать для сотрудников организации</label>
       <label>Токен администратора (запасной способ; администратор организации фиксирует и меняет сценарии своей организации без токена)<input type="password" value={token} onChange={(e) => saveToken(e.target.value)} /></label>
@@ -251,7 +315,7 @@ function Brief({ card }: { card: ScenarioCard }) {
       {card.context && <p>{card.context}</p>}
       <dl>
         <dt>Ваша роль</dt><dd>{card.user_role}</dd>
-        <dt>Собеседник</dt><dd>{card.opponent_role}</dd>
+        <dt>Собеседник</dt><dd>{who(card)}</dd>
         <dt>Ваша цель</dt><dd>{card.user_goal}</dd>
         {card.user_batna && <><dt>Ваша альтернатива</dt><dd>{card.user_batna}{card.method === "batna" && ". Если сделка хуже неё, можно выйти из переговоров."}</dd></>}
         <dt>Предмет торга</dt><dd>{cap(subject || card.topic)} ({short}); вы начинаете с {fmtValue(card.target_zone.user_start, card.target_zone.unit)}</dd>
@@ -268,11 +332,16 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   const [mode, setModeState] = useState<OpponentMode>(() => (store.get(MODE_KEY) === "avatar" ? "avatar" : "text"));
   const [vs, setVs] = useState<VoiceStatus | null | undefined>(undefined);
   const [say, setSay] = useState<Say | null>(null);
+  const [intro, setIntro] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
+  const [hints, setHints] = useState<HintOut[]>([]);
   const setMode = (m: OpponentMode) => { setModeState(m); store.set(MODE_KEY, m); };
   useEffect(() => { api.voiceStatus().then(setVs).catch(() => setVs(null)); }, []);
   const load = () => api.session(sid).then((v) => {
     if (v.status !== "active") { store.set(ACTIVE_KEY, null); go({ name: "result", sid }); return; }
     store.set(ACTIVE_KEY, sid); setS(v);
+    // Наставления маскота показываем перед каждым новым диалогом, до первого хода игрока
+    if (v.turn === 0 && coachTips(v.coach).length) setIntro(true);
     const last = v.messages[v.messages.length - 1];
     if (last?.role === "opponent") setSay({ id: v.turn, text: last.text, mood: v.mood ?? "neutral" });
   }).catch((e) => setErr(`Сессия не загрузилась: ${e.message}`));
@@ -284,6 +353,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
       messages: [...base.messages, user, { role: "opponent", text: r.opponent_message, labels: [] }],
     });
     setSay({ id: r.turn, text: r.opponent_message, mood: r.mood });
+    if (r.hints?.length) setHints(r.hints);
     // В режиме 3D даём собеседнику договорить последнюю реплику, потом открываем разбор
     if (r.status === "finished") { store.set(ACTIVE_KEY, null); window.setTimeout(() => go({ name: "result", sid }), mode === "avatar" ? 6000 : 0); }
   };
@@ -331,33 +401,43 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   if (!s) return <main>{err ? <p className="error">{err}</p> : <p>Загрузка…</p>}</main>;
   const t = s.thresholds;
   const lastUser = [...s.messages].reverse().find((m) => m.role === "user" && m.labels.length);
-  const ready = !busy && s.status === "active";
+  const ready = !busy && s.status === "active" && !intro;
+  const tips = coachTips(s.coach);
+  const name = s.card.opponent_name?.trim() || s.card.opponent_role;
   return (
     <main className="dialog">
       <Brief card={s.card} />
       <div className="row between">
-        <span className="small muted">Собеседник</span>
+        <span className="opp-who"><b>{name}</b>{s.card.opponent_name?.trim() && <span className="muted"> · {s.card.opponent_role}</span>}</span>
         <div className="tabs">{([["text", "Текст"], ["avatar", "3D и голос"]] as [OpponentMode, string][]).map(([v, t]) => (
           <button key={v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{t}</button>
         ))}</div>
       </div>
-      <OpponentAvatar role={s.card.opponent_role} mode={mode} avatarUrl={s.card.avatar_url ?? null} gender={s.card.voice ?? "female"}
-        mood={s.mood ?? "neutral"} say={vs === undefined ? null : say} ttsReady={!!vs?.tts} />
+      <div className="opp-panel">
+      <OpponentAvatar role={who(s.card)} mode={mode} avatarUrl={s.card.avatar_url ?? null} gender={s.card.voice ?? "female"}
+        mood={s.mood ?? "neutral"} say={vs === undefined || intro ? null : say} ttsReady={!!vs?.tts} />
       <section className="bars">
         <Bar label="Доверие" value={(s.state.trust - t.breakdown_trust) / (10 - t.breakdown_trust)} hint="Растёт от вопросов об интересах и эмпатии, падает от давления" />
         <Bar label="Терпение" value={1 - s.state.irritation / t.breakdown_irritation} hint="Когда кончится, собеседник прервёт переговоры" />
         <Bar label="Готовность уступить" value={s.state.readiness / t.concede} hint="На 100% собеседник сдвигает позицию" />
         <p className="small muted">Позиция собеседника: {fmtValue(s.state.position, s.card.target_zone.unit)} · ход {s.turn}/{s.max_turns}</p>
       </section>
-      <div className="log">{s.messages.map((m, i) => (m.role === "user" && m.audio_url
-        ? <VoiceMsg key={i} m={m} />
-        : <div key={i} className={`msg ${m.role === "user" ? "user" : "opp"}`}>{m.text}</div>
-      ))}</div>
+      </div>
+      {intro
+        ? <CoachPanel tips={tips} method={s.card.method} intro onDone={() => setIntro(false)} />
+        : <div className="log">{s.messages.map((m, i) => (m.role === "user" && m.audio_url
+          ? <VoiceMsg key={i} m={m} />
+          : m.role === "user"
+            ? <div key={i} className="msg user">{m.text}</div>
+            : <div key={i} className="msg opp"><span className="msg-who">{name}</span>{m.text}</div>
+        ))}</div>}
+      {!intro && tipsOpen && <CoachPanel tips={tips} method={s.card.method} intro={false} onDone={() => setTipsOpen(false)} />}
+      {!intro && !tipsOpen && tips.length > 0 && <CoachCorner hints={hints} method={s.card.method} onOpen={() => { setHints([]); setTipsOpen(true); }} onClose={() => setHints([])} />}
       {lastUser && <div className="small"><span className="muted">Ваш последний ход: </span><Chips labels={lastUser.labels} /></div>}
       {err && <p className="error">{err}</p>}
       <div className="row">
         <textarea value={msg} maxLength={2500} disabled={!ready} onChange={(e) => setMsg(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Ваша реплика" />
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={intro ? "Собеседник начнёт после наставлений" : "Ваша реплика"} />
         <button className="primary" disabled={!ready || !msg.trim()} onClick={send}>{busy ? "…" : "Отправить"}</button>
         <Recorder disabled={!ready} sttReady={!!vs?.stt} maxSeconds={vs?.max_seconds ?? 30} onSend={sendVoice} onError={setErr} />
       </div>

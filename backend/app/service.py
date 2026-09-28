@@ -6,10 +6,12 @@ from contextlib import contextmanager
 from difflib import SequenceMatcher
 from uuid import uuid4
 
+from sqlalchemy.orm import object_session
+
 from . import llm, voice
 from .config import settings
-from .db import SessionRow, TurnRow
-from .engine import offline, rules
+from .db import ScenarioRow, SessionRow, TurnRow
+from .engine import hints, offline, rules
 from .schemas import JudgeReport, MoveAnalysis, OpponentState, ScenarioCard, SessionResult, TurnOut
 
 log = logging.getLogger(__name__)
@@ -33,6 +35,16 @@ def lock(session_id: str):
 
 def _history(row: SessionRow) -> list[dict]:
     return [{"role": "user" if t.role == "user" else "assistant", "content": t.text} for t in row.turns]
+
+
+def _from_org(db, scenario_id: str) -> bool:
+    """Свои наставления и подсказки сценария помечаются «от организации», если сценарий принадлежит организации."""
+    sc = db.get(ScenarioRow, scenario_id) if db is not None else None
+    return bool(sc and sc.org_id)
+
+
+def _moves(row: SessionRow) -> list[MoveAnalysis]:
+    return [MoveAnalysis(**t.analysis) for t in row.turns if t.role == "user" and t.analysis]
 
 
 def _use_llm() -> bool:
@@ -119,7 +131,7 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
     elif outcome == "walk_away":
         reply = "Понимаю. На этих условиях договориться не получается, расходимся без соглашения."
     elif outcome == "breakdown":
-        reply = "В таком тоне я разговор продолжать не готов. На этом закончим."
+        reply = f"В таком тоне я разговор продолжать не {'готова' if card.voice == 'female' else 'готов'}. На этом закончим."
     elif outcome == "turn_limit":
         reply = "Время вышло, к соглашению мы не пришли."
     elif _use_llm():
@@ -134,13 +146,21 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
     else:
         reply = offline.reply(card, state, move, conceded)
 
+    tips = []
+    if not outcome:
+        seen = {label for m in _moves(row) for label in m.labels} | set(move.labels)
+        fired = list(row.hints_fired or [])
+        tips = hints.fire(card, _from_org(db, row.scenario_id), move, seen, state, row.turn, fired)
+        row.hints_fired = fired + [hid for hid, _ in tips]
+
     row.turns.append(TurnRow(role="user", text=message, analysis=move.model_dump(), audio_url=audio_url))
     row.turns.append(TurnRow(role="opponent", text=reply))
     row.state = state.model_dump()
     if outcome:
         row.status, row.outcome, row.agreed_value = "finished", outcome, value
     db.commit()
-    return TurnOut(turn=row.turn, opponent_message=reply, status=row.status, outcome=outcome, analysis=move, state=state, mood=voice.mood_for(card, state, outcome))
+    return TurnOut(turn=row.turn, opponent_message=reply, status=row.status, outcome=outcome, analysis=move, state=state,
+                   mood=voice.mood_for(card, state, outcome), hints=[h for _, h in tips])
 
 
 def finish(db, row: SessionRow) -> None:
@@ -169,6 +189,7 @@ def rewind(db, row: SessionRow, keep: int) -> SessionRow:
         if opp is not None:
             new.turns.append(TurnRow(role="opponent", text=opp.text))
     new.state = state.model_dump()
+    new.hints_fired = hints.replay(card, _from_org(db, row.scenario_id), [MoveAnalysis(**u.analysis) for u, _ in pairs[:keep]])
     db.add(new)
     db.commit()
     return new
@@ -177,10 +198,12 @@ def rewind(db, row: SessionRow, keep: int) -> SessionRow:
 def view(row: SessionRow) -> dict:
     card = ScenarioCard(**row.card)
     diff = rules.DIFFICULTY[card.difficulty]
+    from_org = _from_org(object_session(row), row.scenario_id)
     return {
         "id": row.id, "scenario_id": row.scenario_id, "card": row.card, "status": row.status, "outcome": row.outcome,
         "turn": row.turn, "max_turns": card.max_turns, "state": row.state, "mood": voice.mood_for(card, OpponentState(**row.state), row.outcome),
-        "thresholds": {"concede": diff["concede_threshold"], "breakdown_irritation": diff["breakdown_irritation"], "breakdown_trust": -6},
+        "thresholds": {"concede": diff["concede_threshold"], "breakdown_irritation": diff["breakdown_irritation"], "breakdown_trust": rules.BREAKDOWN_TRUST},
+        "coach": [h.model_dump() for h in hints.coach(card, from_org)],
         "messages": [{"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", []), "audio_url": t.audio_url} for t in row.turns],
     }
 

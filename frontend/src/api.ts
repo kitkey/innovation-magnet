@@ -22,6 +22,7 @@ export type ScenarioCard = {
   user_role: string;
   user_goal: string;
   opponent_role: string;
+  opponent_name: string;
   opponent_goal: string;
   opponent_hidden_interests: string[];
   opponent_batna: string;
@@ -34,7 +35,12 @@ export type ScenarioCard = {
   locked_by_org: boolean;
   voice: "female" | "male";
   avatar_url: string | null;
+  coach_tips: string[];
+  hints: Hint[];
 };
+
+export type Hint = { when: string; text: string };
+export type HintOut = { text: string; source: "org" | "author" | "standard" | "test" };
 
 export type Scenario = ScenarioCard & { id: string; org_id: string | null; builtin: boolean; can_edit: boolean; edit_key?: string | null };
 
@@ -64,6 +70,7 @@ export type TurnOut = {
   analysis: { labels: string[]; mentioned_details: string[]; proposed_value: number | null };
   state: { trust: number; readiness: number; irritation: number; position: number };
   mood: Mood;
+  hints?: HintOut[];
 };
 
 export type Mood = "neutral" | "happy" | "angry" | "sad" | "disgust";
@@ -101,6 +108,7 @@ export type SessionView = {
   state: TurnOut["state"];
   thresholds: { concede: number; breakdown_irritation: number; breakdown_trust: number };
   mood: Mood;
+  coach: HintOut[];
   messages: Message[];
 };
 

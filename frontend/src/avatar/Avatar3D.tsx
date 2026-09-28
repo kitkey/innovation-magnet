@@ -33,7 +33,7 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail }: P
     let alive = true;
     let h: TalkingHead;
     try {
-      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "head", cameraRotateEnable: false, avatarMood: mood, modelFPS: 30 });
+      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "upper", cameraDistance: -1, cameraY: -0.1, cameraRotateEnable: false, avatarMood: mood, modelFPS: 30 });
     } catch (e) { onFail(`3D не запустился: ${(e as Error).message}`); return; }
     h.lipsync.ru = new LipsyncRu();
     head.current = h;
