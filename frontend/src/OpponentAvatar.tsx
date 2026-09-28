@@ -5,8 +5,8 @@ import { webglAvailable } from "./avatar/speech";
 
 export type OpponentMode = "text" | "avatar";
 export const DEFAULT_AVATAR = "/avatars/mpfb.glb";
-// Сценарий без своего аватара: женский голос получает чиби, мужской — MPFB
-export const defaultAvatar = (gender: ScenarioCard["voice"]) => (gender === "female" ? "/avatars/chibi_b1.glb" : DEFAULT_AVATAR);
+// Сценарий без своего аватара получает чиби по голосу: женский — B1 (Ольга), мужской — B3 (Сергей). MPFB остаётся запасным файлом
+export const defaultAvatar = (gender: ScenarioCard["voice"]) => (gender === "female" ? "/avatars/chibi_b1.glb" : "/avatars/chibi_b3.glb");
 const Avatar3D = lazy(() => import("./avatar/Avatar3D"));
 
 // Ошибка загрузки чанка с three.js или падение внутри 3D не должны ронять диалог
