@@ -82,7 +82,7 @@ export default function Home({ user, go }: { user: User | null; go: Go }) {
           {err && <p className="error">{err}</p>}
           {groups.map(([domain, list]) => (
             <section key={domain} className="group">
-              <div className="gh"><GroupArt domain={domain} /><b>{domain || "Без сферы"}</b><span className="cap">{list.length} {plural(list.length, "сценарий", "сценария", "сценариев")}</span></div>
+              <div className="gh"><GroupArt domain={domain} icon={list[0].domain_icon} /><b>{domain || "Без сферы"}</b><span className="cap">{list.length} {plural(list.length, "сценарий", "сценария", "сценариев")}</span></div>
               {list.map((s) => {
                 const cont = active?.scenario_id === s.id ? active : null;
                 const done = passed(s.id);

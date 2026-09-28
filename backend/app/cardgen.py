@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from .schemas import ScenarioCard, TargetZone
+from .schemas import DOMAIN_ICONS, ScenarioCard, TargetZone
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,15 @@ FIELDS: list[Block] = [
           "сфера жизни или работы, 1–3 слова",
           "Область, к которой относится ситуация: «Закупки», «Работа в команде», «Аренда жилья», «Трудоустройство», «Учёба».",
           "«Закупки»", "«переговоры о цене» (это тема, а не сфера)"),
+    Block("domain_icon", "значок группы",
+          "значок сферы из списка: " + ", ".join(DOMAIN_ICONS),
+          "Значок, под которым сценарий попадёт в группу на главной. Одно имя из списка: procurement — закупки и поставщики, "
+          "team — работа в команде, руководитель, коллеги; project — проекты и заказчики, фриланс; residents — резиденты, аренда площадей "
+          "для бизнеса; career — карьера, оффер, зарплата; sales — продажи, магазин; service — клиентский сервис, поддержка, жалобы; "
+          "finance — финансы, бюджет, банк; legal — юристы, договоры; logistics — логистика, доставка, склад; production — производство; "
+          "it — IT и разработка; hr — найм и кадры; marketing — маркетинг и реклама; government — госорганы; startup — стартап, инвесторы; "
+          "everyday — быт, соседи, аренда жилья, учёба. Выбирай по сфере, а не по словам в тексте.",
+          "domain «Аренда жилья» → everyday", "придумывать своё имя значка"),
     Block("topic", "тема",
           "о чём разговор, одно предложение",
           "Одно предложение: о чём конкретно торгуются и почему именно сейчас.",
@@ -244,6 +253,7 @@ class GeneratedCard(BaseModel):
     """Схема для модели. Имена полей говорящие (title вместо name), служебных полей и идентификаторов нет."""
     title: str = Field(min_length=1, description=SHORT["title"])
     domain: str = Field(min_length=1, description=SHORT["domain"])
+    domain_icon: str = Field(default="", description=SHORT["domain_icon"])
     topic: str = Field(min_length=1, description=SHORT["topic"])
     user_role: str = Field(min_length=1, description=SHORT["user_role"])
     user_goal: str = Field(min_length=1, description=SHORT["user_goal"])
@@ -271,6 +281,13 @@ class GeneratedCard(BaseModel):
             s = v.strip().lower()
             return ENUM_RU[info.field_name].get(s, s)
         return v
+
+    @field_validator("domain_icon", mode="before")
+    @classmethod
+    def _icon(cls, v):
+        """Незнакомый значок не повод проваливать генерацию: пусто значит «подобрать по сфере»."""
+        v = str(v or "").strip().lower()
+        return v if v in DOMAIN_ICONS else ""
 
     @field_validator("opponent_hidden_interests", "mandatory_details", mode="before")
     @classmethod
@@ -330,7 +347,7 @@ def to_card(g: GeneratedCard) -> ScenarioCard:
     if name.lower() == g.opponent_role.strip().lower() or len(name.split()) > 4:
         name = ""
     return ScenarioCard(
-        name=title, domain=g.domain.strip(), topic=g.topic.strip(), difficulty=g.difficulty, tone=g.tone, method=g.method, style=g.style,
+        name=title, domain=g.domain.strip(), domain_icon=g.domain_icon or None, topic=g.topic.strip(), difficulty=g.difficulty, tone=g.tone, method=g.method, style=g.style,
         user_role=g.user_role.strip(), user_goal=g.user_goal.strip(), opponent_role=g.opponent_role.strip(), opponent_name=name[:80],
         opponent_goal=g.opponent_goal.strip(), opponent_hidden_interests=g.opponent_hidden_interests[:5],
         opponent_batna=g.opponent_batna.strip(), user_batna=g.user_batna.strip(), target_zone=g.target_zone.to_zone(),

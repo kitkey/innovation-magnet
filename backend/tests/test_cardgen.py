@@ -6,6 +6,8 @@ from app import cardgen, llm
 from app.cardgen import CardGenError, GeneratedCard, explain, fix_opening, system_prompt, to_card
 from app.config import settings
 from app.main import app
+from app.schemas import ScenarioCard
+from app.seeds import SEEDS
 
 
 def raw(**kw):
@@ -118,3 +120,25 @@ def test_generate_endpoint_reports_card_error(monkeypatch):
         r = c.post("/api/scenarios/generate", json={"description": "Хочу скидку у поставщика, он даёт мало."})
     assert r.status_code == 422 and "выходит за стартовые позиции" in r.json()["detail"]
     assert cardgen.CardGenError is CardGenError
+
+
+def test_domain_icon_in_card_and_generation():
+    base = SEEDS["supplier-price-batna"].model_dump()
+    assert ScenarioCard(**base).domain_icon is None
+    assert ScenarioCard(**base | {"domain_icon": ""}).domain_icon is None
+    assert ScenarioCard(**base | {"domain_icon": "logistics"}).domain_icon == "logistics"
+    with pytest.raises(ValidationError):
+        ScenarioCard(**base | {"domain_icon": "rocket"})
+    assert to_card(GeneratedCard(**raw(domain_icon="Marketing"))).domain_icon == "marketing"
+    assert to_card(GeneratedCard(**raw(domain_icon="rocket"))).domain_icon is None
+    assert "everyday" in system_prompt()
+
+
+def test_domain_icon_saved_via_api():
+    card = SEEDS["supplier-price-batna"].model_dump() | {"name": "Значок группы", "domain_icon": "logistics"}
+    with TestClient(app) as c:
+        s = c.post("/api/scenarios", json=card).json()
+        assert s["domain_icon"] == "logistics"
+        listed = next(x for x in c.get("/api/scenarios", params={"ids": s["id"]}).json() if x["id"] == s["id"])
+        assert listed["domain_icon"] == "logistics"
+        assert c.post("/api/scenarios", json=card | {"domain_icon": "rocket"}).status_code == 422

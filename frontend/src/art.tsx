@@ -24,22 +24,47 @@ export function Art({ src, className, fallback = null }: { src: string; classNam
   return <img className={className} src={src} alt="" decoding="async" draggable={false} onError={() => setBad(src)} />;
 }
 
-/** Сценка группы по сфере сценария; своя сфера без картинки получает SVG-плитку. */
-const GROUP_FILES: [RegExp, string][] = [
-  [/закуп|постав|снабж/i, "grp_procurement"],
-  [/команд|коллег|руковод|отдел/i, "grp_team"],
-  [/проект|заказчик|клиент/i, "grp_project"],
-  [/резидент|аренд|оэз|цех/i, "grp_residents"],
-  [/карьер|оффер|зарплат|оклад|работодат/i, "grp_career"],
+/** Значки групп: имя файла grp_<имя>.png и подпись для выбора в форме. Список совпадает с DomainIcon на сервере. */
+export const GROUP_ICONS: [string, string][] = [
+  ["procurement", "Закупки"], ["sales", "Продажи"], ["service", "Клиентский сервис"], ["finance", "Финансы"], ["legal", "Юристы и договоры"],
+  ["logistics", "Логистика"], ["production", "Производство"], ["it", "IT и разработка"], ["hr", "HR и найм"], ["marketing", "Маркетинг"],
+  ["government", "Госорганы"], ["startup", "Стартап и инвесторы"], ["career", "Карьера"], ["team", "Работа в команде"],
+  ["project", "Проекты и заказчики"], ["residents", "Резиденты и площадки"], ["everyday", "Быт и повседневное"],
 ];
-export function groupArt(domain: string): string | null {
-  const hit = GROUP_FILES.find(([re]) => re.test(domain));
-  return hit ? `${ILL}/${hit[1]}.png` : null;
+
+/** Значок по словам сферы. Порядок важен: узкие сферы раньше общих («Аренда жилья» — быт, а не резиденты). */
+const GROUP_FILES: [RegExp, string][] = [
+  [/закуп|постав|снабж|тендер/i, "procurement"],
+  [/продаж|магазин|торгов|покупател|ритейл/i, "sales"],
+  [/сервис|поддержк|обслуживан|жалоб|претензи/i, "service"],
+  [/финанс|бюджет|банк|кредит|бухгалт|платеж/i, "finance"],
+  [/юри|договор|суд|правов|контракт/i, "legal"],
+  [/логист|доставк|склад|перевоз|транспорт/i, "logistics"],
+  [/производ|завод|фабрик|станк/i, "production"],
+  [/\bit\b|айти|(^|[\s-])ит([\s-]|$)|разработ|программ|софт/i, "it"],
+  [/\bhr\b|найм|кадр|персонал|рекрут/i, "hr"],
+  [/маркет|реклам|бренд|smm|продвижен/i, "marketing"],
+  [/госорган|государ|министер|администрац|ведомств|муницип|чиновн/i, "government"],
+  [/стартап|инвестор|венчур|основател/i, "startup"],
+  [/карьер|оффер|зарплат|оклад|работодат|трудоустр/i, "career"],
+  [/команд|коллег|руковод|отдел/i, "team"],
+  [/проект|заказчик|клиент|фриланс/i, "project"],
+  [/быт|повседнев|сосед|квартир|жиль|семь|ремонт|учёб|учеб|универ|студен/i, "everyday"],
+  [/резидент|аренд|оэз|цех/i, "residents"],
+];
+export const iconSrc = (name: string) => `${ILL}/grp_${name}.png`;
+export function autoIcon(domain: string): string | null {
+  return GROUP_FILES.find(([re]) => re.test(domain))?.[1] ?? null;
+}
+export function groupArt(domain: string, icon?: string | null): string | null {
+  const name = icon || autoIcon(domain);
+  return name ? iconSrc(name) : null;
 }
 
-export function GroupArt({ domain }: { domain: string }) {
+/** Значок группы: выбранный автором первого сценария группы, иначе по словам сферы, иначе SVG-плитка. */
+export function GroupArt({ domain, icon }: { domain: string; icon?: string | null }) {
   const tile = <span className="tile"><Icon name={DOMAIN_ICON[domain] ?? "chat"} size={20} /></span>;
-  const src = groupArt(domain);
+  const src = groupArt(domain, icon);
   return src ? <Art className="gart" src={src} fallback={tile} /> : tile;
 }
 

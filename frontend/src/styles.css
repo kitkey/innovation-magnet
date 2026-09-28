@@ -111,6 +111,16 @@ legend { font-weight: 800; font-size: 14px; padding: 0 6px; }
 .zl-opp { fill: var(--surface); stroke: var(--bad); stroke-width: 2; }
 .zl-num { font-size: 13px; font-weight: 700; fill: var(--ink); font-family: var(--f); }
 .zl-lab { font-size: 12px; font-weight: 600; fill: var(--muted); font-family: var(--f); }
+.icon-pick { display: grid; gap: 8px; }
+.icon-pick > p { margin: 0; }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; }
+.icon-grid button { min-height: 0; height: 58px; padding: 4px; border-radius: 12px; border: 1.5px solid transparent; background: var(--surface); }
+.icon-grid button img { width: 48px; height: 48px; object-fit: contain; display: block; }
+.icon-grid button:hover:not(:disabled) { border-color: var(--line); background: var(--line-2); }
+.icon-grid button.auto { border: 1.5px dashed var(--accent); }
+.icon-grid button.on, .icon-grid button.on:hover:not(:disabled) { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+.icon-grid .ic-auto { font-size: 13px; font-weight: 700; color: var(--ink-2); border-color: var(--line); }
+.icon-grid .ic-auto.on { color: var(--accent); }
 .note { padding: 10px 14px; border-left: 3px solid var(--line); background: var(--surface); border-radius: 0 var(--r-f) var(--r-f) 0; color: var(--ink-2); font-size: 14px; }
 .cabinet { display: grid; gap: 16px; }
 .cabinet h2 { margin: 0; }

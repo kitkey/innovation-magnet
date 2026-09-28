@@ -14,6 +14,7 @@ export function fmtValue(v: number, unit: string): string {
 export type ScenarioCard = {
   name: string;
   domain: string;
+  domain_icon?: string | null;
   topic: string;
   difficulty: "easy" | "medium" | "hard";
   tone: "neutral" | "friendly" | "strict" | "skeptical";

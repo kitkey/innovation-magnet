@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile } from "./account";
-import { ART, Empty, Scene } from "./art";
+import { ART, autoIcon, Empty, GROUP_ICONS, iconSrc, Scene } from "./art";
 import { api, AUTH_KEY, Hint, HistoryItem, Scenario, ScenarioCard, store, User } from "./api";
 import Dialog from "./Dialog";
 import Home, { SessionRow } from "./Home";
@@ -13,7 +13,7 @@ const EMPTY: ScenarioCard = {
   name: "", domain: "", topic: "", difficulty: "medium", tone: "neutral", method: "free", style: "hard",
   user_role: "", user_goal: "", opponent_role: "", opponent_name: "", opponent_goal: "", opponent_hidden_interests: [],
   opponent_batna: "", user_batna: "", target_zone: { unit: "", user_start: 0, zone_min: 0, zone_max: 0, opponent_start: 0 },
-  mandatory_details: [], context: "", opening: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null,
+  mandatory_details: [], context: "", opening: "", max_turns: 10, locked_by_org: false, voice: "female", avatar_url: null, domain_icon: null,
   coach_tips: [], hints: [],
 };
 
@@ -142,6 +142,25 @@ function HintsField({ value, maxTurns, onChange }: { value: Hint[]; maxTurns: nu
   );
 }
 
+function IconPicker({ domain, value, onChange }: { domain: string; value: string | null; onChange: (v: string | null) => void }) {
+  const auto = autoIcon(domain);
+  const autoLabel = auto ? GROUP_ICONS.find(([n]) => n === auto)?.[1] : null;
+  return (
+    <fieldset className="icon-pick"><legend><FieldLabel label="Значок группы" help={FIELD_HELP.domain_icon} /></legend>
+      <p className="small muted">{value ? "Выбран вручную." : autoLabel ? `Авто: «${autoLabel}», по слову в сфере.` : "Авто: по сфере значок не подобрался, в списке будет плитка."}</p>
+      <div className="icon-grid" role="radiogroup" aria-label="Значок группы">
+        <button type="button" role="radio" aria-checked={!value} className={`ic-auto ${!value ? "on" : ""}`} onClick={() => onChange(null)}>Авто</button>
+        {GROUP_ICONS.map(([n, t]) => (
+          <button key={n} type="button" role="radio" aria-checked={value === n} title={t} aria-label={t}
+            className={`${value === n ? "on" : ""} ${!value && auto === n ? "auto" : ""}`} onClick={() => onChange(n)}>
+            <img src={iconSrc(n)} alt="" width={48} height={48} draggable={false} />
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function lines(v: string) { return v.split("\n").map((x) => x.trim()).filter(Boolean); }
 
 function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go: Go }) {
@@ -190,7 +209,9 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
         </div>
       </section>
       {help && <ScenarioHelp onClose={() => setHelp(false)} />}
-      {text("name", "Название")}{text("domain", "Сфера")}{text("topic", "Тема")}
+      {text("name", "Название")}{text("domain", "Сфера")}
+      <IconPicker domain={card.domain} value={card.domain_icon ?? null} onChange={(v) => set("domain_icon", v)} />
+      {text("topic", "Тема")}
       {select("difficulty", "Сложность", [["easy", "Лёгкая"], ["medium", "Средняя"], ["hard", "Сложная"]])}
       {select("tone", "Тон", [["neutral", "Нейтральный"], ["friendly", "Дружелюбный"], ["strict", "Строгий"], ["skeptical", "Скептичный"]])}
       {select("method", "Метод, который тренируем", [["free", "Свободный"], ["spin", "SPIN"], ["harvard", "Гарвардский"], ["batna", "BATNA"]])}

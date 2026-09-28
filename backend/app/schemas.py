@@ -33,6 +33,9 @@ MoveLabel = Literal[
 Mood = Literal["neutral", "happy", "angry", "sad", "disgust", "skeptic"]
 AVATAR_URL = r"^/(uploads/avatars|avatars)/[A-Za-z0-9_.\-]+\.glb$"
 Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "walk_away", "breakdown", "turn_limit", "user_finished"]
+DomainIcon = Literal["procurement", "team", "project", "residents", "career", "sales", "service", "finance", "legal",
+                     "logistics", "production", "it", "hr", "marketing", "government", "startup", "everyday"]
+DOMAIN_ICONS = get_args(DomainIcon)
 
 
 class TargetZone(BaseModel):
@@ -99,6 +102,7 @@ class HintOut(BaseModel):
 class ScenarioCard(BaseModel):
     name: str = Field(min_length=1, description="название сценария в списке: предмет разговора и с кем, 3–7 слов; не имя собеседника")
     domain: str = Field(description="сфера: «Закупки», «Работа в команде», «Аренда жилья»")
+    domain_icon: DomainIcon | None = Field(default=None, description="значок группы на главной; пусто — подбирается по словам сферы")
     topic: str = Field(description="о чём торг и почему сейчас, одно предложение")
     difficulty: Difficulty = "medium"
     tone: Tone = "neutral"
@@ -129,6 +133,11 @@ class ScenarioCard(BaseModel):
     @classmethod
     def _tips(cls, v):
         return [t.strip()[:300] for t in v or [] if isinstance(t, str) and t.strip()]
+
+    @field_validator("domain_icon", mode="before")
+    @classmethod
+    def _empty_icon(cls, v):
+        return v or None
 
     @field_validator("avatar_url", mode="before")
     @classmethod
