@@ -15,8 +15,11 @@ def _kwargs() -> dict:
     fallbacks = [m.strip() for m in settings.llm_fallbacks.split(",") if m.strip()]
     if fallbacks:
         kw["fallbacks"] = fallbacks
-    if settings.llm_api_key:
-        kw["api_key"] = settings.llm_api_key
+    key = settings.llm_api_key
+    if not key and settings.llm_api_base and "api.cloud.yandex.net" in settings.llm_api_base:
+        key = settings.yandex_api_key  # YandexGPT и SpeechKit работают на одном API-ключе сервисного аккаунта
+    if key:
+        kw["api_key"] = key
     if settings.llm_api_base:
         kw["api_base"] = settings.llm_api_base
     return kw
