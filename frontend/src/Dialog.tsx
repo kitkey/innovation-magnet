@@ -81,6 +81,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
   const [hintTurn, setHintTurn] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const setMode = (m: OpponentMode) => { setModeState(m); store.set(MODE_KEY, m); if (m === "text") setSpeaking(false); };
@@ -187,7 +188,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
         <div className="t">
           <b>{card.name}</b>
           <span>{meta}</span>
-          <em>ход {s.turn} из {s.max_turns} · {name}</em>
+          <em>ход {s.turn} из {s.max_turns}</em>
         </div>
         <div className="turnc desk"><span className="num">Ход {s.turn} из {s.max_turns}</span><Segs n={s.turn} of={s.max_turns} /></div>
         <div className="desk seg-desk"><ModeTabs mode={mode} setMode={setMode} /></div>
@@ -198,6 +199,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
           {menu && (
             <div className="dmenu">
               <ModeTabs mode={mode} setMode={(v) => { setMode(v); setMenu(false); }} />
+              <button onClick={() => { setMenu(false); setBriefOpen(true); }}><Icon name="clip" />Ситуация и цель</button>
               {tips.length > 0 && !intro && <button onClick={openTips}><Icon name="book" />Наставления</button>}
               <button disabled={!ready || s.turn === 0} onClick={undo}><Icon name="undo" />Отменить ход</button>
               <button disabled={!ready} onClick={finish}><Icon name="flag" />Завершить</button>
@@ -238,7 +240,6 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
             <div><span className="caps">Позиция</span><b className="num">{fmtValue(s.state.position, card.target_zone.unit)}</b></div>
           </div>
           <PriceScale card={card} position={s.state.position} />
-          <details className="brief-m"><summary>Ситуация и цель</summary><div className="bm"><BriefBody card={card} clamp={false} /></div></details>
         </aside>
 
         <section className="chat">
@@ -294,6 +295,14 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
           {!intro && tips.length > 0 && <CoachCorner hints={hints} method={card.method} onOpen={openTips} onClose={() => setHints([])} />}
         </aside>
       </div>
+      {briefOpen && (
+        <div className="sheet" role="dialog" aria-label="Ситуация и цель" onClick={(e) => { if (e.target === e.currentTarget) setBriefOpen(false); }}>
+          <div className="sheet-in">
+            <div className="sheet-h"><b>Ситуация и цель</b><button className="ghost icon" aria-label="Закрыть" onClick={() => setBriefOpen(false)}><Icon name="x" /></button></div>
+            <BriefBody card={card} clamp={false} />
+          </div>
+        </div>
+      )}
       {!intro && tipsOpen && <CoachPanel tips={tips} method={card.method} intro={false} onDone={() => setTipsOpen(false)} />}
     </div>
   );

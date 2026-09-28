@@ -1,6 +1,6 @@
 /* Направление B «Сцена»: нейтральные токены, один акцент, Manrope. Цвет — метка, не заливка. */
 :root {
-  --bg: #F4F7FD; --surface: #FFFFFF; --ink: #16183F; --ink-2: #474B72; --muted: #6F7499; --line: #E2E6F2; --line-2: #EDF0F7;
+  --bg: #F4F7FD; --surface: #FFFFFF; --ink: #16183F; --ink-2: #474B72; --muted: #62678C; --line: #E2E6F2; --line-2: #EDF0F7;
   --accent: #2B2F88; --accent-h: #23267A; --accent-soft: #ECEDF8; --accent-2: #64CDFF; --good: #23845A; --bad: #C2362B; --warn: #9A6A12; --warn-fill: #C98A1B;
   --room-1: #E9EDF6; --room-2: #DCE2EE; --room-3: #CFD7E7;
   --r-s: 10px; --r-f: 8px; --r-m: 16px; --r-l: 22px;
@@ -181,7 +181,7 @@ td.place .medal { margin-left: 6px; }
 .hist li:first-child { border-top: 0; }
 
 /* Входной тест */
-.quiz { display: grid; gap: 10px; max-width: 680px; }
+.quiz { display: grid; gap: 12px; max-width: 680px; width: 100%; margin: 0 auto; }
 .quiz h1 { font-size: 24px; line-height: 1.3; margin: 4px 0 10px; }
 .qhead { display: flex; align-items: center; gap: 14px; }
 .qhead .segs i { width: 28px; }
@@ -208,8 +208,9 @@ td.place .medal { margin-left: 6px; }
 .oppcol { grid-area: opp; padding: 20px 20px 16px 24px; display: flex; flex-direction: column; gap: 14px; border-right: 1px solid var(--line); min-height: 0; overflow-y: auto; }
 .stage { position: relative; aspect-ratio: 4 / 5; max-height: 440px; width: 100%; border-radius: var(--r-l); overflow: hidden; flex: none;
   background: var(--stage-image), linear-gradient(180deg, var(--room-1) 0%, var(--room-2) 70%, var(--room-3) 70.3%, #D5DCEA 100%); background-size: cover; }
-.stage.textmode { aspect-ratio: auto; height: 132px; display: grid; place-items: center; }
-.stage .mono { width: 72px; height: 72px; border-radius: 50%; background: var(--surface); color: var(--accent); display: grid; place-items: center; font-size: 24px; font-weight: 800; border: 1px solid var(--line); }
+.stage.textmode { aspect-ratio: auto; height: auto; background: none; border-radius: 0; display: flex; align-items: center; gap: 12px; overflow: visible; }
+.stage.textmode .status { position: static; }
+.stage .mono { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 15px; font-weight: 800; border: 1px solid var(--line); }
 .stage .status { position: absolute; left: 16px; top: 14px; z-index: 2; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--ink); }
 .eq { display: inline-flex; gap: 2px; align-items: center; height: 12px; }
 .eq i { width: 3px; border-radius: 2px; background: var(--accent); animation: eq 1s ease-in-out infinite; }
@@ -238,7 +239,7 @@ td.place .medal { margin-left: 6px; }
 .scale { position: relative; height: 62px; margin: 4px 6px 0; }
 .scale .ln { position: absolute; left: 0; right: 0; top: 28px; height: 2px; background: var(--line); }
 .scale .gap { position: absolute; top: 28px; height: 2px; background: var(--muted); opacity: .45; }
-.scale .pt { position: absolute; top: 22px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.scale .pt { position: absolute; top: 22px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .scale .pt i { width: 2px; height: 14px; background: currentColor; border-radius: 1px; }
 .scale .pt span { margin-top: 4px; font-weight: 600; }
 .scale .pt.opp { color: var(--bad); top: 0; flex-direction: column-reverse; }
@@ -251,7 +252,7 @@ td.place .medal { margin-left: 6px; }
 .log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 20px 32px 12px; }
 .log > :first-child { margin-top: auto; }
 .rep { max-width: 84%; }
-.rep .mh { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+.rep .mh { display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
 .rep .mh b { color: var(--ink-2); font-weight: 700; }
 .rep p { margin: 0; font-size: 15px; white-space: pre-wrap; }
 .rep.user { align-self: flex-end; }
@@ -266,7 +267,7 @@ td.place .medal { margin-left: 6px; }
 .marks .lab.bad { color: var(--bad); }
 .marks .lab.neu { color: var(--ink-2); }
 .marks .sep { width: 1px; height: 12px; background: var(--line); }
-.marks .dl { font-size: 12px; font-weight: 500; color: var(--muted); }
+.marks .dl { flex-basis: 100%; font-size: 12.5px; font-weight: 500; color: var(--muted); }
 .marks .dl em { font-style: normal; font-weight: 700; }
 .hintref { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 12px; font-weight: 700; }
 .hintref::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--accent); }
@@ -294,7 +295,6 @@ button.mic.off { color: var(--muted); }
 .side p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
 .clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .side .spacer { flex: 1; min-height: 12px; }
-.brief-m { display: none; }
 
 /* Маскот и наставления */
 .coach { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 24px 32px; overflow-y: auto; }
@@ -348,7 +348,7 @@ button.mic.off { color: var(--muted); }
 .rgrid aside { display: grid; gap: 16px; }
 .panel h2 { font-size: 16px; }
 .spark svg { display: block; width: 100%; height: auto; margin-top: 8px; }
-.legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin-top: 8px; flex-wrap: wrap; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--ink-2); margin-top: 8px; flex-wrap: wrap; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
 .axes { display: grid; gap: 14px; margin-top: 6px; }
@@ -372,6 +372,8 @@ button.mic.off { color: var(--muted); }
 .moment .two .bad { color: var(--bad); } .moment .two .good { color: var(--good); }
 .moment .two p { margin: 0; color: var(--ink-2); }
 .moment button, .turns button { min-height: 32px; font-size: 13px; padding: 0 12px; }
+button.replay { border-color: transparent; background: none; color: var(--accent); padding: 0 8px; white-space: nowrap; }
+button.replay:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
 .turns { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); }
 .turns li { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px 20px; border-top: 1px solid var(--line-2); }
 .turns li:first-child { border-top: 0; }
@@ -421,6 +423,9 @@ button.mic.off { color: var(--muted); }
   .gh { padding: 12px 16px; }
   .item { padding: 12px 16px; }
   .item .go button.icon { display: none; }
+  .item { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .item .go { justify-content: flex-start; }
+  .item .go button { min-height: 44px; padding: 0 18px; }
   .hints-field .hint-row { grid-template-columns: minmax(0, 1fr) 44px; }
   .hints-field .hint-row > label:nth-child(2) { grid-column: 1; }
   .hints-field .hint-row .hint-del { grid-column: 2; grid-row: 1; }
@@ -450,10 +455,6 @@ button.mic.off { color: var(--muted); }
   .mmeters .caps { font-size: 9.5px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mmeters b { font-size: 14px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
   .mmeters b span { font-size: 11px; margin-left: 4px; }
-  .brief-m { display: block; margin-top: 2px; font-size: 13px; }
-  .brief-m summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; min-height: 32px; }
-  .brief-m .bm { display: grid; gap: 8px; max-height: 38vh; overflow-y: auto; padding-bottom: 8px; }
-  .brief-m p { margin: 0; color: var(--ink-2); }
   .side { display: none; }
   .chat { flex: 1; min-height: 0; }
   .log { padding: 10px 16px; gap: 12px; -webkit-mask-image: linear-gradient(transparent, #000 16px); mask-image: linear-gradient(transparent, #000 16px); }
@@ -490,9 +491,17 @@ button.mic.off { color: var(--muted); }
   .moments { padding: 0 16px; }
   .moment .two { grid-template-columns: 1fr; gap: 10px; }
   .moment .head { flex-wrap: wrap; }
-  .turns li { grid-template-columns: 28px minmax(0, 1fr); padding: 12px 14px; }
-  .turns li > button { grid-column: 2; justify-self: start; }
+  .turns li { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 14px; }
+  .turns li > button { justify-self: start; padding: 0; }
 }
 .sessions .rrow:first-child { border-top: 0; }
 em.dlt { font-style: normal; font-weight: 700; }
 .side .coach-hint p { color: #fff; font-size: 13px; line-height: 1.45; }
+
+.mute-tag { position: absolute; right: 12px; top: 10px; z-index: 2; font-size: 12px; font-weight: 600; color: var(--ink-2); background: rgba(255, 255, 255, .75); border-radius: 8px; padding: 4px 8px; cursor: help; }
+.sheet { position: fixed; inset: 0; z-index: 40; background: rgba(22, 24, 63, .28); display: flex; align-items: flex-end; }
+.sheet-in { width: 100%; max-height: 80vh; overflow-y: auto; background: var(--surface); border-radius: 18px 18px 0 0; padding: 12px 20px 24px; display: grid; gap: 12px; }
+.sheet-in section { display: grid; gap: 2px; }
+.sheet-in p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.sheet-h { display: flex; justify-content: space-between; align-items: center; }
+.form > button { justify-self: start; }

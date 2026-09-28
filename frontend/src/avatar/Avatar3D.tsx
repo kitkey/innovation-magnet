@@ -86,7 +86,7 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail, onS
       {busy && !subtitle && <div className="avatar-over muted small">Готовит ответ…</div>}
       {subtitle && <div className="subtitle">{subtitle}</div>}
       {note && !subtitle && <p className="small muted avatar-note">{note}</p>}
-      {!ttsReady && ready && !subtitle && <p className="small muted avatar-note">Озвучка не настроена: собеседник двигает губами без звука.</p>}
+      {!ttsReady && ready && <span className="mute-tag" title="Озвучка не настроена: собеседник двигает губами без звука, реплика видна субтитром">Без звука</span>}
     </div>
   );
 }

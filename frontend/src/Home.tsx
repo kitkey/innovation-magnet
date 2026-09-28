@@ -42,6 +42,8 @@ export default function Home({ user, go }: { user: User | null; go: Go }) {
   const passedCount = items.filter((s) => passed(s.id).length).length;
   const groups: [string, Scenario[]][] = [];
   items.forEach((s) => { const g = groups.find(([d]) => d === s.domain); if (g) g[1].push(s); else groups.push([s.domain, [s]]); });
+  const first = (g: Scenario[]) => g.some((s) => s.id === active?.scenario_id || s.id === rec?.id);
+  groups.sort((a, b) => Number(first(b[1])) - Number(first(a[1])));
   const lastOpp = active ? [...active.messages].reverse().find((m) => m.role === "opponent") : undefined;
   const lastAt = active ? parseAt(active.messages[active.messages.length - 1]?.at) : null;
   const segs = (n: number, of: number) => <span className="segs">{Array.from({ length: Math.min(of, 20) }, (_, i) => <i key={i} className={i < n ? "on" : ""} />)}</span>;

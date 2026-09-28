@@ -114,7 +114,6 @@ export function Marks({ m, before, after, card, t, hinted }: { m: Message; befor
     <div className="marks">
       {m.labels.map((l) => <span key={l} className={`lab ${BAD_LABELS.has(l) && !(l === "concession" && m.labels.includes("conditional_trade")) ? "bad" : NEUTRAL_LABELS.has(l) ? "neu" : ""}`}>{LABEL_RU[l] ?? l}</span>)}
       {(shifts.length > 0 || moved) && <>
-        {m.labels.length > 0 && <span className="sep" />}
         <span className="dl">за ход: {shifts.map(([n, d], i) => <span key={n}>{i > 0 && " · "}{n} <Delta d={d} /></span>)}
           {moved && <>{shifts.length > 0 && " · "}позиция собеседника <b>{fmtValue(before!.position, card.target_zone.unit)} → {fmtValue(after!.position, card.target_zone.unit)}</b></>}
         </span>

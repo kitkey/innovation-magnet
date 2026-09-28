@@ -82,7 +82,7 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
   const firstBad = moments.find((m) => m.turn !== null)?.turn;
   const series = s && states.length && states.every((x) => x.after) && s.initial_state
     ? [meters(s.initial_state, s.thresholds), ...states.map((x) => meters(x.after!, s.thresholds))] : null;
-  const replayBtn = (i: number) => <button onClick={() => replay(i)}><Icon name="replay" size={16} />Переиграть отсюда</button>;
+  const replayBtn = (i: number) => <button className="replay" onClick={() => replay(i)}><Icon name="replay" size={16} />Переиграть отсюда</button>;
   const axes = Object.entries(r.judge?.axes ?? {});
 
   return (
