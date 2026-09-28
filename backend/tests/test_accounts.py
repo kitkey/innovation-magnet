@@ -231,7 +231,7 @@ def test_open_scenarios_belong_to_author(client):
     assert client.put(f"/api/scenarios/{own['id']}", json=card | {"locked_by_org": True}, headers=hb).status_code == 403
     assert client.put(f"/api/scenarios/{own['id']}", json=card | {"locked_by_org": True}, headers=hm).status_code == 403
     listed = {s["id"]: s for s in client.get("/api/scenarios", headers=hb).json()}
-    assert listed[own["id"]]["can_edit"] is False and listed[seed]["can_edit"] is False
+    assert own["id"] not in listed and listed[seed]["can_edit"] is False
 
     guest = client.post("/api/scenarios", json=card).json()
     key = guest["edit_key"]
@@ -241,3 +241,23 @@ def test_open_scenarios_belong_to_author(client):
     assert client.put(f"/api/scenarios/{guest['id']}", json=card, headers=hb).status_code == 403
     assert client.put(f"/api/scenarios/{guest['id']}", json=card | {"name": "Гость"}, headers={"X-Edit-Key": key}).json()["name"] == "Гость"
     assert client.put(f"/api/scenarios/{guest['id']}", json=card | {"locked_by_org": True}, headers={"X-Edit-Key": key}).status_code == 403
+
+
+def test_scenario_list_is_scoped(client):
+    ha, _ = register(client)
+    hm, _ = register(client)
+    hb, _ = register(client)
+    code = client.post("/api/orgs", json={"name": "Видимость А"}, headers=ha).json()["invite_code"]
+    client.post("/api/orgs/join", json={"code": code}, headers=hm)
+    client.post("/api/orgs", json={"name": "Видимость Б"}, headers=hb)
+    card = SEEDS["split-with-colleague"].model_dump()
+    locked = client.post("/api/scenarios", json=card | {"locked_by_org": True}, headers=ha).json()["id"]
+    own = client.post("/api/scenarios", json=card, headers=hm).json()["id"]
+    guest = client.post("/api/scenarios", json=card).json()["id"]
+    ids = lambda h, **p: {s["id"] for s in client.get("/api/scenarios", headers=h, params=p).json()}
+    assert set(SEEDS) <= ids({}) and set(SEEDS) <= ids(hb)
+    assert {locked, own} <= ids(hm) and {locked, own} <= ids(ha)
+    assert not {locked, own, guest} & ids(hb)
+    assert not {locked, own, guest} & ids({})
+    assert guest in ids({}, ids=f"{guest},{locked}") and locked not in ids({}, ids=f"{guest},{locked}")
+    assert {locked, own, guest} <= ids({"X-Admin-Token": "test-admin"})

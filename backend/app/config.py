@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     yandex_folder_id: str = ""
     voice_timeout: float = 20.0
     voice_max_seconds: int = 30
+    voice_text_normalization: bool = False
     uploads_dir: str = ""
     avatar_max_mb: int = 30
     uploads_max_mb: int = 1024

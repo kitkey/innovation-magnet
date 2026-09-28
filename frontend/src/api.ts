@@ -120,7 +120,7 @@ async function call<T>(path: string, init?: RequestInit, json = true): Promise<T
 }
 
 export const api = {
-  scenarios: () => call<Scenario[]>("/api/scenarios"),
+  scenarios: () => call<Scenario[]>(store.get(AUTH_KEY) ? "/api/scenarios" : `/api/scenarios?ids=${Object.keys(editKeys.all()).join(",")}`),
   createScenario: async (card: ScenarioCard) => {
     const s = await call<Scenario>("/api/scenarios", { method: "POST", body: JSON.stringify(card) });
     if (s.edit_key) editKeys.add(s.id, s.edit_key);

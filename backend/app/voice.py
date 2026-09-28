@@ -53,6 +53,14 @@ class VoiceError(Exception):
         self.status, self.message = status, message
 
 
+
+def _normalization(pb):
+    """Нормализация распознанного текста (числа цифрами, пунктуация, литературная правка) по умолчанию выключена:
+    судья и разбор видят речь как есть, со словами-паразитами. VOICE_TEXT_NORMALIZATION=true включает её."""
+    if settings.voice_text_normalization:
+        return pb.TextNormalizationOptions(text_normalization=pb.TextNormalizationOptions.TEXT_NORMALIZATION_ENABLED, literature_text=True)
+    return pb.TextNormalizationOptions(text_normalization=pb.TextNormalizationOptions.TEXT_NORMALIZATION_DISABLED)
+
 def uploads_dir() -> Path:
     return Path(settings.uploads_dir) if settings.uploads_dir else Path(__file__).resolve().parent.parent / "uploads"
 
@@ -186,7 +194,7 @@ def _stt_requests(audio: Audio):
            if audio.kind == "pcm" else pb.AudioFormatOptions(container_audio=pb.ContainerAudio(container_audio_type=pb.ContainerAudio.OGG_OPUS)))
     options = pb.StreamingOptions(recognition_model=pb.RecognitionModelOptions(
         model="general", audio_format=fmt,
-        text_normalization=pb.TextNormalizationOptions(text_normalization=pb.TextNormalizationOptions.TEXT_NORMALIZATION_ENABLED, literature_text=True),
+        text_normalization=_normalization(pb),
         language_restriction=pb.LanguageRestrictionOptions(restriction_type=pb.LanguageRestrictionOptions.WHITELIST, language_code=["ru-RU"]),
         audio_processing_type=pb.RecognitionModelOptions.FULL_DATA,
     ))

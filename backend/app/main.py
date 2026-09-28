@@ -79,10 +79,22 @@ def _out(row: ScenarioRow, token: str | None = None, user: UserRow | None = None
     return Scenario(id=row.id, org_id=row.org_id, builtin=row.id in SEEDS, can_edit=_can_edit(row, token, user, edit_key), **row.card)
 
 
+def _can_see(row: ScenarioRow, token: str | None, user: UserRow | None, known: set[str]) -> bool:
+    """В списке: встроенные, свои, сценарии своей организации и сценарии, созданные этим браузером без входа (их id он передаёт сам)."""
+    if _is_admin(token) or row.id in SEEDS:
+        return True
+    if user is not None and (row.owner_id == user.id or (row.org_id and row.org_id == user.org_id)):
+        return True
+    return row.owner_id is None and bool(row.edit_key) and row.id in known
+
+
 @app.get("/api/scenarios", response_model=list[Scenario])
-def list_scenarios(db=Depends(get_db), x_admin_token: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
+def list_scenarios(ids: str = "", db=Depends(get_db), x_admin_token: str | None = Header(default=None), user: UserRow | None = Depends(current_user)):
+    known = {i for i in ids.split(",") if i}
     out = []
     for r in db.query(ScenarioRow).order_by(ScenarioRow.created_at):
+        if not _can_see(r, x_admin_token, user, known):
+            continue
         try:
             out.append(_out(r, x_admin_token, user))
         except ValidationError:
