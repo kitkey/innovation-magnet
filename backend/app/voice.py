@@ -91,7 +91,7 @@ def mood_for(card: ScenarioCard, state: OpponentState, outcome: str | None = Non
         return "angry"
     if outcome in ("agreement_in_zone", "agreement_out_of_zone"):
         return "happy"
-    if outcome == "turn_limit":
+    if outcome in ("turn_limit", "walk_away"):
         return "sad"
     if state.irritation >= max(2, math.ceil(0.6 * rules.DIFFICULTY[card.difficulty]["breakdown_irritation"])):
         return "angry"

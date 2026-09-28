@@ -6,7 +6,7 @@ export type ScenarioCard = {
   topic: string;
   difficulty: "easy" | "medium" | "hard";
   tone: "neutral" | "friendly" | "strict" | "skeptical";
-  method: "spin" | "harvard" | "free";
+  method: "spin" | "harvard" | "batna" | "free";
   style: "hard" | "cooperative" | "avoiding" | "pressing" | "emotional";
   user_role: string;
   user_goal: string;
@@ -59,6 +59,8 @@ export type SessionResult = {
   final_position: number | null;
   in_zone: boolean | null;
   position_shift: number | null;
+  walk_away_justified?: boolean | null;
+  walk_away_note?: string | null;
   details_covered: string[];
   details_missed: string[];
   judge: { axes: Record<string, number>; key_moments: { quote: string; problem: string; better: string }[]; next_scenario_hint: string } | null;

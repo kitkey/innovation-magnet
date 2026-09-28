@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 Difficulty = Literal["easy", "medium", "hard"]
 Tone = Literal["neutral", "friendly", "strict", "skeptical"]
-Method = Literal["spin", "harvard", "free"]
+Method = Literal["spin", "harvard", "batna", "free"]
 Style = Literal["hard", "cooperative", "avoiding", "pressing", "emotional"]
 MoveLabel = Literal[
     "interest_question",
@@ -24,10 +24,14 @@ MoveLabel = Literal[
     "vague",
     "accept",
     "manipulation",
+    "batna_reference",
+    "boundary",
+    "conditional_trade",
+    "walk_away",
 ]
 Mood = Literal["neutral", "happy", "angry", "sad", "disgust"]
 AVATAR_URL = r"^/(uploads/avatars|avatars)/[A-Za-z0-9_.\-]+\.glb$"
-Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "breakdown", "turn_limit", "user_finished"]
+Outcome = Literal["agreement_in_zone", "agreement_out_of_zone", "walk_away", "breakdown", "turn_limit", "user_finished"]
 
 
 class TargetZone(BaseModel):
@@ -153,6 +157,8 @@ class SessionResult(BaseModel):
     final_position: float | None
     in_zone: bool | None
     position_shift: float | None
+    walk_away_justified: bool | None = Field(default=None, description="при выходе к альтернативе: позиция собеседника была хуже границы целевой зоны")
+    walk_away_note: str | None = None
     details_covered: list[str]
     details_missed: list[str]
     judge: JudgeReport | None

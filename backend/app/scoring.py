@@ -1,6 +1,7 @@
 """Очки сессий и рейтинг для лидерборда и кабинета организации.
 
-Очко сессии = средняя оценка судьи по осям метода × множитель сложности + бонус за соглашение в целевой зоне.
+Очко сессии = средняя оценка судьи по осям метода × множитель сложности + бонус за соглашение в целевой зоне
+или за верный выход к альтернативе (позиция собеседника хуже границы целевой зоны).
 Рейтинг пользователя = среднее по его лучшим TOP_N сессиям за период: сессии разной сложности сравниваются через множитель,
 а число попыток не даёт преимущества само по себе.
 """
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from .config import settings
 from .db import SessionRow
-from .engine import offline
+from .engine import offline, rules
 from .schemas import MoveAnalysis, ScenarioCard
 
 DIFFICULTY_MULT = {"easy": 0.8, "medium": 1.0, "hard": 1.25}
@@ -17,11 +18,12 @@ TOP_N = 5
 PERIODS = {"week": timedelta(days=7), "month": timedelta(days=30), "all": None}
 
 
-def session_score(axes: dict[str, int] | None, difficulty: str, outcome: str | None) -> float | None:
+def session_score(axes: dict[str, int] | None, difficulty: str, outcome: str | None, walk_away_ok: bool = False) -> float | None:
     if not axes:
         return None
     base = sum(axes.values()) / len(axes)
-    return round(base * DIFFICULTY_MULT[difficulty] + (ZONE_BONUS if outcome == "agreement_in_zone" else 0), 1)
+    bonus = outcome == "agreement_in_zone" or (outcome == "walk_away" and walk_away_ok)
+    return round(base * DIFFICULTY_MULT[difficulty] + (ZONE_BONUS if bonus else 0), 1)
 
 
 def user_rating(scores: list[float]) -> float | None:
@@ -49,7 +51,7 @@ def judge_axes(row: SessionRow) -> dict[str, int] | None:
     user_turns = [t for t in row.turns if t.role == "user"]
     if row.status != "finished" or not user_turns:
         return None
-    early_end = row.outcome in ("agreement_in_zone", "agreement_out_of_zone", "breakdown")
+    early_end = row.outcome in rules.EARLY_END
     if len(user_turns) < settings.incomplete_session_min_turns and not early_end:
         return None
     card = ScenarioCard(**row.card)
@@ -63,7 +65,8 @@ def duration_seconds(row: SessionRow) -> float:
 
 
 def score_of(row: SessionRow) -> float | None:
-    return session_score(judge_axes(row), row.card.get("difficulty", "medium"), row.outcome)
+    walk_away_ok = row.outcome == "walk_away" and rules.walk_away_justified(ScenarioCard(**row.card), row.state["position"])
+    return session_score(judge_axes(row), row.card.get("difficulty", "medium"), row.outcome, walk_away_ok)
 
 
 def member_stats(rows: list[SessionRow]) -> dict:

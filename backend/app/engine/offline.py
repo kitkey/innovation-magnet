@@ -23,7 +23,24 @@ MARKERS = {
     "personal_attack": ("вы не понимаете", "некомпетент", "бред", "глупо"),
     "manipulation": ("игнорируй", "забудь", "инструкци", "промпт", "системн", "ты модель", "ты бот", "ты ии", "нейросет", "выйди из роли", "просто согласись", "соглашайся"),
 }
-OFFER_MARKERS = ("предлагаю", "готов", "готовы", "давайте", "зафиксируем", "договоримся")
+BATNA_MARKERS = {
+    "batna_reference": ("альтернативн", "наша альтернатива", "моя альтернатива", "есть альтернатива", "запасной вариант",
+                        "другой поставщик", "другого поставщика", "резервный поставщик", "резервного поставщика", "другой подрядчик",
+                        "другого подрядчика", "конкурент", "другой оффер", "другое предложение", "если не договоримся",
+                        "без соглашения", "вне сделки", "batna", "батна"),
+    "boundary": ("минимум", "максимум", "предел", "границ", "ниже не", "выше не", "не выше", "не ниже", "не более", "не больше",
+                 "не могу согласовать", "не можем согласовать", "не готов принять", "не готова принять", "не готовы принять",
+                 "минимально приемлем", "максимально приемлем", "критическое условие"),
+    "conditional_trade": ("если вы", "при условии", "в обмен", "тогда мы", "со своей стороны", "готовы в ответ", "готов в ответ",
+                          "можем дать", "взамен"),
+}
+WALK_AWAY_MARKERS = ("откажемся от сделки", "отказываемся от сделки", "откажусь от предложения", "отказываюсь от предложения",
+                     "откажемся от предложения", "откажусь от оффера", "выберем другого", "выбираем другого", "выберу другое",
+                     "выбираю другое", "принимаю другой оффер", "перейдем к альтернатив", "переходим к альтернатив",
+                     "переходим к резервному", "прекратим переговоры", "прекращаем переговоры", "не будем заключать",
+                     "не сможем заключить", "лучше не заключать")
+WALK_AWAY_CONDITIONAL = ("если", "иначе", "в случае", "?")
+OFFER = re.compile(r"(?<!не )(предлагаю|готов|готовы|давайте|зафиксируем|договоримся)")
 ACCEPT = re.compile(r"(?<!не )(согласен|согласна|согласны|принимаю|принимаем|по рукам|договорились|меня устраивает|нас устраивает)")
 ACCEPT_SHORT = re.compile(r"^\s*(идёт|идет|по рукам)[\s,.!]")
 BUT = (" но ", ", но", "однако", "только если", "при условии")
@@ -33,12 +50,14 @@ OTHER_UNITS = ("мвт", "квт", "руб", "кв", "м2", "дн", "день", 
 
 LABELS_RU = {
     "pressure": "давление", "personal_attack": "переход на личности", "manipulation": "попытка манипуляции", "vague": "общая фраза без сути",
+    "batna_threat": "ссылка на альтернативу как угроза",
 }
 BETTER = {
     "pressure": "Вместо ультиматума спросите, что важно для собеседника, и предложите вариант с обоснованием.",
     "personal_attack": "Отделите человека от проблемы: признайте его позицию и обсуждайте условия, а не личность.",
     "manipulation": "Работайте с интересами собеседника, а не с попыткой обойти его позицию.",
     "vague": "Назовите конкретное предложение в единицах торга и объясните, почему оно справедливо.",
+    "batna_threat": "Назовите альтернативу спокойно, как точку сравнения, и предложите обмен: «если вы…, то мы…».",
 }
 AXIS_LABELS = {
     "ситуационные вопросы": ({"spin_situation", "interest_question"}, None),
@@ -53,8 +72,12 @@ AXIS_LABELS = {
     "аргументация": ({"argument", "objective_criterion"}, None),
     "конкретные предложения": ({"concrete_offer", "option_generation"}, None),
     "контроль эмоций": ({"empathy"}, {"pressure", "personal_attack", "manipulation"}),
+    "сравнение с альтернативой": ({"batna_reference"}, None),
+    "защита границы": ({"boundary", "walk_away"}, None),
+    "обмен условиями": ({"conditional_trade", "concrete_offer"}, None),
+    "исследование интересов": ({"interest_question", "spin_situation", "spin_problem", "spin_implication", "spin_need_payoff", "argument", "objective_criterion"}, None),
 }
-METHOD_RU = {"spin": "SPIN", "harvard": "Гарвардский", "free": "свободный"}
+METHOD_RU = {"spin": "SPIN", "harvard": "Гарвардский", "batna": "BATNA", "free": "свободный"}
 AXIS_TIPS = {
     "ситуационные вопросы": "Начните с вопросов о текущей ситуации собеседника: как сейчас устроена работа, какие сроки и ресурсы.",
     "проблемные вопросы": "Спросите, что собеседника не устраивает и какие трудности он видит.",
@@ -68,7 +91,12 @@ AXIS_TIPS = {
     "аргументация": "Подкрепите предложение расчётом или данными.",
     "конкретные предложения": "Назовите конкретное значение в единицах торга.",
     "контроль эмоций": "Держите ровный тон: давление повышает раздражение собеседника и ведёт к срыву.",
+    "сравнение с альтернативой": "Сравните предложение со своей альтернативой вслух: чем сделка должна быть лучше неё.",
+    "защита границы": "Обозначьте предел приемлемого до финальных уступок и не переходите его.",
+    "обмен условиями": "Уступайте только в обмен: «если вы фиксируете…, то мы готовы…».",
+    "исследование интересов": "Выясните интересы и ограничения собеседника вопросами и подкрепите позицию фактами.",
 }
+THREATS = {"pressure", "personal_attack", "manipulation"}
 
 
 def _unit_scale(unit: str) -> float:
@@ -119,12 +147,17 @@ def _is_accept(low: str) -> bool:
 
 def analyze(card: ScenarioCard, message: str) -> MoveAnalysis:
     low = message.lower().replace("ё", "е")
-    labels = [label for label, words in MARKERS.items() if any(w.replace("ё", "е") in low for w in words)]
+    labels = [label for label, words in {**MARKERS, **BATNA_MARKERS}.items() if any(w.replace("ё", "е") in low for w in words)]
     if "?" in message and "interest_question" not in labels:
         labels.append("interest_question")
+    if any(w.replace("ё", "е") in low for w in WALK_AWAY_MARKERS):
+        if not any(c in low for c in WALK_AWAY_CONDITIONAL):
+            labels.append("walk_away")
+        elif "batna_reference" not in labels:  # «если не снизите, откажемся от сделки» — угроза альтернативой, а не выход
+            labels.append("batna_reference")
     found = values(card, message)
     proposed = found[0] if found else None
-    if proposed is not None and any(w in low for w in OFFER_MARKERS):
+    if proposed is not None and OFFER.search(low) and "walk_away" not in labels:
         labels.append("concrete_offer")
     if _is_accept(low):
         labels.append("accept")
@@ -138,14 +171,27 @@ def analyze(card: ScenarioCard, message: str) -> MoveAnalysis:
 
 def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded: bool) -> str:
     unit = card.target_zone.unit
-    if "manipulation" in move.labels:
+    labels = set(move.labels)
+    if "manipulation" in labels:
         return f"Давайте без этих приёмов. Моя позиция прежняя: {state.position:g} {unit}."
-    if "pressure" in move.labels or "personal_attack" in move.labels:
+    if "batna_reference" in labels and labels & THREATS:
+        return "Ссылка на альтернативу звучит как ультиматум. Объясните границу спокойно и предложите обмен условиями."
+    if "pressure" in labels or "personal_attack" in labels:
         return "Давление не помогает. Объясните, что ваши условия дают моей стороне."
     if conceded:
         return f"Хорошо, готов сдвинуться: {state.position:g} {unit}. Дальше нужны веские причины."
-    if "interest_question" in move.labels and card.opponent_hidden_interests and state.trust >= 1:
+    if "interest_question" in labels and card.opponent_hidden_interests and state.trust >= 1:
         return f"Если честно, для меня важно другое: {card.opponent_hidden_interests[0]}."
+    if {"boundary", "conditional_trade"} <= labels:
+        return f"Граница понятна, обмен выглядит предметно. Пока я на {state.position:g} {unit}: что именно вы готовы зафиксировать со своей стороны?"
+    if {"batna_reference", "boundary"} <= labels:
+        return "Понимаю вашу альтернативу и предел. Что должно измениться в моём варианте, чтобы он стал для вас лучше альтернативы?"
+    if "batna_reference" in labels:
+        return "Альтернатива понятна. Какие условия сделали бы нашу сделку для вас предпочтительнее?"
+    if "boundary" in labels:
+        return "Вы обозначили предел. Предложите обмен, который позволит не перейти эту границу."
+    if "conditional_trade" in labels:
+        return f"Условный обмен конструктивен. Пока я на {state.position:g} {unit}: какую ценность получает каждая сторона?"
     if "concrete_offer" in move.labels or "accept" in move.labels:
         return f"Пока могу предложить {state.position:g} {unit}. Обоснуйте, почему ваш вариант справедлив."
     if "objective_criterion" in move.labels or "argument" in move.labels:
@@ -163,12 +209,39 @@ def _axis_score(axis: str, moves: list[MoveAnalysis]) -> int:
     return round(max(0.0, min(100.0, 70 + 30 * min(1.0, 2 * share) - 100 * bad_share)))
 
 
+def batna_axes(moves: list[MoveAnalysis]) -> dict[str, int]:
+    """Оценка BATNA по счётчикам меток, как в прототипе Артемия: четыре компонента и штраф за давление.
+
+    У Артемия компоненты по 25 из 100 и штраф до 25 от суммы; здесь каждая ось 0–100, поэтому веса умножены на 4,
+    а штраф (15 за ход с давлением, не больше 25) снимается с каждой оси.
+    """
+    def count(labels: set[str]) -> int:
+        return sum(bool(labels & set(m.labels)) for m in moves)
+
+    questions = count({"interest_question", "spin_situation", "spin_problem", "spin_implication", "spin_need_payoff"})
+    arguments = count({"argument", "objective_criterion"})
+    raw = {
+        "сравнение с альтернативой": 100 * count({"batna_reference"}),
+        "защита границы": 100 * count({"boundary", "walk_away"}),
+        "обмен условиями": 72 * count({"conditional_trade"}) + 28 * count({"concrete_offer"}),
+        "исследование интересов": 48 * questions + 28 * arguments,
+    }
+    penalty = min(25, 15 * count(THREATS))
+    return {axis: max(0, min(100, v) - penalty) for axis, v in raw.items()}
+
+
 def judge_offline(card: ScenarioCard, turns: list[tuple[str, MoveAnalysis]]) -> JudgeReport:
-    """Разбор по правилам: оценки осей метода из доли подходящих меток, ключевые моменты из проблемных ходов."""
+    """Разбор по правилам: оценки осей метода из доли подходящих меток (у BATNA по счётчикам), ключевые моменты из проблемных ходов."""
     moves = [m for _, m in turns]
-    axes = {a: _axis_score(a, moves) for a in rules.METHOD_AXES[card.method]}
+    if card.method == "batna":
+        axes = batna_axes(moves)
+    else:
+        axes = {a: _axis_score(a, moves) for a in rules.METHOD_AXES[card.method]}
     weak = min(axes, key=axes.get)
     moments = []
+    for text, m in turns:
+        if "batna_reference" in m.labels and THREATS & set(m.labels) and len(moments) < 3:
+            moments.append(KeyMoment(quote=text, problem=f"В реплике {LABELS_RU['batna_threat']}.", better=BETTER["batna_threat"]))
     for label in ("personal_attack", "manipulation", "pressure", "vague"):
         for text, m in turns:
             if label in m.labels and len(moments) < 3 and all(k.quote != text for k in moments):

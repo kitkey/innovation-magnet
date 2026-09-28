@@ -83,6 +83,8 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
 
     if outcome in ("agreement_in_zone", "agreement_out_of_zone"):
         reply = f"Договорились: {value:g} {card.target_zone.unit}. Фиксируем."
+    elif outcome == "walk_away":
+        reply = "Понимаю. На этих условиях договориться не получается, расходимся без соглашения."
     elif outcome == "breakdown":
         reply = "В таком тоне я разговор продолжать не готов. На этом закончим."
     elif outcome == "turn_limit":
@@ -174,6 +176,16 @@ def sanitize_judge(card: ScenarioCard, report: JudgeReport, user_texts: list[str
     return JudgeReport(axes=axes, key_moments=moments[:3], next_scenario_hint=report.next_scenario_hint or fallback.next_scenario_hint)
 
 
+def walk_away_verdict(card: ScenarioCard, position: float) -> tuple[bool, str]:
+    """Верно ли пользователь вышел к альтернативе: позиция собеседника на момент выхода против худшего края целевой зоны."""
+    unit, edge = card.target_zone.unit, rules.zone_boundary(card)
+    if rules.walk_away_justified(card, position):
+        return True, (f"Верное решение: собеседник стоял на {position:g} {unit}, это хуже границы целевой зоны ({edge:g} {unit}), "
+                      f"выгодной сделки не было и альтернатива лучше: {card.user_batna}.")
+    return False, (f"Выход преждевременный: собеседник уже стоял на {position:g} {unit}, это не хуже границы целевой зоны "
+                   f"({edge:g} {unit}), сделка была не хуже вашей альтернативы.")
+
+
 def result(db, row: SessionRow) -> SessionResult:
     card = ScenarioCard(**row.card)
     user_turns = [t for t in row.turns if t.role == "user"]
@@ -186,8 +198,12 @@ def result(db, row: SessionRow) -> SessionResult:
         in_zone = z.zone_min <= row.agreed_value <= z.zone_max
         shift = row.agreed_value - z.user_start
 
+    justified = note = None
+    if row.outcome == "walk_away":
+        justified, note = walk_away_verdict(card, OpponentState(**row.state).position)
+
     judge, source = (JudgeReport(**row.judge), "llm") if row.judge else (None, None)
-    early_end = row.outcome in ("agreement_in_zone", "agreement_out_of_zone", "breakdown")
+    early_end = row.outcome in rules.EARLY_END
     if judge is None and row.status == "finished" and user_turns and (not incomplete or early_end):
         turns = [(t.text, MoveAnalysis(**t.analysis)) for t in user_turns]
         fallback = offline.judge_offline(card, turns)
@@ -195,7 +211,7 @@ def result(db, row: SessionRow) -> SessionResult:
         if _use_llm() and not incomplete:
             try:
                 marked = [{"role": t.role, "text": t.text, "labels": (t.analysis or {}).get("labels", [])} for t in row.turns]
-                judge = sanitize_judge(card, llm.judge(card, marked), [t.text for t in user_turns], fallback)
+                judge = sanitize_judge(card, llm.judge(card, marked, note or ""), [t.text for t in user_turns], fallback)
                 source = "llm"
                 row.judge = judge.model_dump()
                 db.commit()
@@ -206,4 +222,5 @@ def result(db, row: SessionRow) -> SessionResult:
         session_id=row.id, status=row.status, outcome=row.outcome, incomplete=incomplete,
         final_position=row.agreed_value, in_zone=in_zone, position_shift=shift,
         details_covered=covered, details_missed=missed, judge=judge, judge_source=source,
+        walk_away_justified=justified, walk_away_note=note,
     )

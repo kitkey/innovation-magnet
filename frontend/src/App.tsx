@@ -13,12 +13,13 @@ type Go = (v: View) => void;
 const OUTCOME: Record<string, string> = {
   agreement_in_zone: "Соглашение в целевой зоне",
   agreement_out_of_zone: "Соглашение вне целевой зоны",
+  walk_away: "Рациональный выход к альтернативе",
   breakdown: "Срыв переговоров",
   turn_limit: "Лимит ходов",
   user_finished: "Завершено пользователем",
 };
 
-const RU: Record<string, string> = { easy: "лёгкая", medium: "средняя", hard: "сложная", spin: "SPIN", harvard: "Гарвардский", free: "свободный", cooperative: "сотрудничающий", avoiding: "уклоняющийся", pressing: "давящий", emotional: "эмоциональный" };
+const RU: Record<string, string> = { easy: "лёгкая", medium: "средняя", hard: "сложная", spin: "SPIN", harvard: "Гарвардский", batna: "BATNA", free: "свободный", cooperative: "сотрудничающий", avoiding: "уклоняющийся", pressing: "давящий", emotional: "эмоциональный" };
 const STYLE_RU: Record<string, string> = { hard: "жёсткий" };
 
 const LABEL_RU: Record<string, string> = {
@@ -27,6 +28,7 @@ const LABEL_RU: Record<string, string> = {
   option_generation: "варианты", concrete_offer: "конкретное предложение", concession: "уступка", empathy: "эмпатия",
   argument: "аргумент", mandatory_detail: "обязательная деталь", pressure: "давление", personal_attack: "переход на личности",
   vague: "общая фраза", accept: "согласие", manipulation: "манипуляция",
+  batna_reference: "сравнение с альтернативой", boundary: "граница", conditional_trade: "обмен условиями", walk_away: "выход к альтернативе",
 };
 const BAD_LABELS = new Set(["pressure", "personal_attack", "vague", "manipulation"]);
 
@@ -181,7 +183,7 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       {text("name", "Название")}{text("domain", "Сфера")}{text("topic", "Тема")}
       {select("difficulty", "Сложность", [["easy", "Лёгкая"], ["medium", "Средняя"], ["hard", "Сложная"]])}
       {select("tone", "Тон", [["neutral", "Нейтральный"], ["friendly", "Дружелюбный"], ["strict", "Строгий"], ["skeptical", "Скептичный"]])}
-      {select("method", "Метод, который тренируем", [["free", "Свободный"], ["spin", "SPIN"], ["harvard", "Гарвардский"]])}
+      {select("method", "Метод, который тренируем", [["free", "Свободный"], ["spin", "SPIN"], ["harvard", "Гарвардский"], ["batna", "BATNA"]])}
       {select("style", "Стиль собеседника", [["hard", "Жёсткий"], ["cooperative", "Сотрудничающий"], ["avoiding", "Уклоняющийся"], ["pressing", "Давящий"], ["emotional", "Эмоциональный"]])}
       {text("user_role", "Ваша роль")}{text("user_goal", "Ваша цель", true)}
       {text("opponent_role", "Роль собеседника")}{text("opponent_goal", "Цель собеседника", true)}
@@ -308,6 +310,7 @@ function Dialog({ sid, go }: { sid: string; go: Go }) {
   return (
     <main className="dialog">
       <p className="muted">{s.card.user_role} ↔ {s.card.opponent_role}. Цель: {s.card.user_goal}</p>
+      {s.card.method === "batna" && <p className="small muted">Ваша альтернатива: {s.card.user_batna}. Если сделка хуже неё, можно выйти из переговоров.</p>}
       <div className="row between">
         <span className="small muted">Собеседник</span>
         <div className="tabs">{([["text", "Текст"], ["avatar", "3D и голос"]] as [OpponentMode, string][]).map(([v, t]) => (
@@ -363,6 +366,7 @@ function Result({ sid, go }: { sid: string; go: Go }) {
     <main className="result">
       <h2>{r.status === "active" ? "Сессия не завершена" : OUTCOME[r.outcome ?? ""] ?? r.outcome}</h2>
       {r.final_position !== null && <p>Итог: {r.final_position} {s?.card.target_zone.unit}{r.position_shift !== null && ` (сдвиг от вашей стартовой позиции: ${r.position_shift})`}</p>}
+      {r.walk_away_note && <p className={r.walk_away_justified ? "" : "note"}>{r.walk_away_note}</p>}
       {r.incomplete && <p className="note">Меньше трёх реплик — полный разбор не строим.</p>}
       <p>Проговорено: {r.details_covered.join(", ") || "—"}</p>
       <p>Не проговорено: {r.details_missed.join(", ") || "—"}</p>

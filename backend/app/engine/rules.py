@@ -21,7 +21,12 @@ LABEL_EFFECTS = {
     "personal_attack": {"trust": -3, "irritation": 3},
     "vague": {"irritation": 1},
     "manipulation": {"trust": -1, "irritation": 2},
+    "batna_reference": {"readiness": 1},
+    "boundary": {"readiness": 1},
+    "conditional_trade": {"trust": 1, "readiness": 2},
 }
+THREAT_LABELS = {"pressure", "personal_attack", "manipulation"}
+BATNA_AS_THREAT = {"trust": -2}
 
 STYLE_MULTIPLIERS = {
     "hard": {"trust": 0.5, "readiness": 0.8, "irritation": 1.0},
@@ -38,10 +43,12 @@ DIFFICULTY = {
 }
 
 CONCESSION_STEPS = 4
+EARLY_END = ("agreement_in_zone", "agreement_out_of_zone", "walk_away", "breakdown")
 
 METHOD_AXES = {
     "spin": ["ситуационные вопросы", "проблемные вопросы", "извлекающие вопросы", "направляющие вопросы"],
     "harvard": ["люди отдельно от проблемы", "интересы, а не позиции", "варианты взаимной выгоды", "объективные критерии"],
+    "batna": ["сравнение с альтернативой", "защита границы", "обмен условиями", "исследование интересов"],
     "free": ["выяснение интересов", "аргументация", "конкретные предложения", "контроль эмоций"],
 }
 
@@ -79,12 +86,31 @@ def opponent_limit(card: ScenarioCard) -> float:
     return far + (near - far) * share
 
 
+def zone_boundary(card: ScenarioCard) -> float:
+    """Худший для пользователя край целевой зоны: дальше него сделка хуже его альтернативы."""
+    z = card.target_zone
+    return z.zone_min if _direction(card) > 0 else z.zone_max
+
+
+def walk_away_justified(card: ScenarioCard, position: float) -> bool:
+    """Выход к альтернативе верен, если текущая позиция собеседника хуже для пользователя, чем граница целевой зоны."""
+    return better_for_user(card, zone_boundary(card), position)
+
+
+def _effects(label: str, labels: set[str]) -> dict:
+    """Ссылка на альтернативу без давления двигает к уступке, вместе с давлением или манипуляцией звучит как угроза."""
+    if label == "batna_reference" and labels & THREAT_LABELS:
+        return BATNA_AS_THREAT
+    return LABEL_EFFECTS.get(label, {})
+
+
 def apply_move(card: ScenarioCard, state: OpponentState, move: MoveAnalysis) -> tuple[OpponentState, bool]:
     """Возвращает новое состояние и флаг «собеседник уступил на этом ходу»."""
     mult = STYLE_MULTIPLIERS[card.style]
     s = state.model_copy()
+    labels = set(move.labels)
     for label in move.labels:
-        for counter, delta in LABEL_EFFECTS.get(label, {}).items():
+        for counter, delta in _effects(label, labels).items():
             setattr(s, counter, getattr(s, counter) + round(delta * mult[counter]))
     s.irritation = max(0, s.irritation)
 
@@ -93,7 +119,8 @@ def apply_move(card: ScenarioCard, state: OpponentState, move: MoveAnalysis) -> 
     limit = opponent_limit(card)
     step = abs(limit - card.target_zone.opponent_start) / CONCESSION_STEPS
     d = _direction(card)
-    if s.readiness >= threshold and s.trust >= 0 and d * (limit - s.position) > 1e-9:
+    walking_away = "walk_away" in labels  # переговоры на этом ходу заканчиваются, выход оценивается по позиции до хода
+    if not walking_away and s.readiness >= threshold and s.trust >= 0 and d * (limit - s.position) > 1e-9:
         s.position = min(s.position + step, limit) if d > 0 else max(s.position - step, limit)
         s.readiness -= threshold
         conceded = True
@@ -101,6 +128,8 @@ def apply_move(card: ScenarioCard, state: OpponentState, move: MoveAnalysis) -> 
 
 
 def decide_outcome(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, turn: int) -> tuple[Outcome | None, float | None]:
+    if "walk_away" in move.labels:
+        return "walk_away", None
     diff = DIFFICULTY[card.difficulty]
     if state.irritation >= diff["breakdown_irritation"] or state.trust <= -6:
         return "breakdown", None
