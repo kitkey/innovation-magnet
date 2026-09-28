@@ -6,6 +6,7 @@ declare module "@met4citizen/talkinghead" {
     audioCtx: AudioContext;
     lipsync: Record<string, unknown>;
     animMoods: Record<string, Record<string, unknown>>;
+    renderer: { toneMapping: number };
     showAvatar(avatar: Record<string, unknown>, onprogress?: (ev: ProgressEvent) => void): Promise<void>;
     setMood(mood: string): void;
     speakAudio(r: SpeakAudio, opt?: Record<string, unknown>, onsubtitles?: ((node: unknown) => void) | null): void;

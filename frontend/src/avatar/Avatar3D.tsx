@@ -5,7 +5,8 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { api, Mood, ScenarioCard, Speech } from "../api";
 import { LipsyncRu } from "./lipsync-ru";
 import { b64ToArrayBuffer, estimateTimings, subtitleChunks } from "./speech";
-import { cameraFor, EXTRA_MOODS } from "./profiles";
+import { NeutralToneMapping } from "three";
+import { EXTRA_MOODS, profileFor } from "./profiles";
 
 // TalkingHead 1.7 из npm создаёт GLTFLoader без декодера Meshopt; подключаем его, чтобы грузить сжатые модели (наша весит 3 МБ вместо 37)
 const parse = GLTFLoader.prototype.parse;
@@ -36,7 +37,9 @@ export default function Avatar3D({ url, gender, mood, say, ttsReady, onFail, onS
     let alive = true;
     let h: TalkingHead;
     try {
-      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "upper", ...cameraFor(url), cameraRotateEnable: false, avatarMood: "neutral", modelFPS: 30 });
+      const p = profileFor(url);
+      h = new TalkingHead(node.current!, { lipsyncModules: [], lipsyncLang: "ru", cameraView: "upper", ...p.camera, ...p.light, cameraRotateEnable: false, avatarMood: "neutral", modelFPS: 30 });
+      if (p.neutralTone) h.renderer.toneMapping = NeutralToneMapping;
       for (const [name, m] of Object.entries(EXTRA_MOODS)) h.animMoods[name] = { ...h.animMoods[m.base], baseline: m.baseline };
     } catch (e) { onFail(`3D не запустился: ${(e as Error).message}`); return; }
     h.lipsync.ru = new LipsyncRu();
