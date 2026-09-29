@@ -24,7 +24,8 @@ export function zoneSubject(z: TargetZone): string {
 export function fmtValue(v: number, z: TargetZone | string): string {
   if (typeof z !== "string" && isOrdinal(z)) return z.options![optIndex(z, v)];
   const { short } = unitParts(typeof z === "string" ? z : z.unit);
-  return short === "%" ? `${v}%` : `${v} ${short}`;
+  const n = String(+v.toFixed(2)).replace(".", ",");
+  return short === "%" ? `${n}%` : `${n} ${short}`;
 }
 
 /** Короткая запись позиции для тесных мест: номер варианта или число с единицей. */

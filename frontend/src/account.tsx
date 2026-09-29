@@ -173,7 +173,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
         <div className="facts">
           <div className="fact"><span className="num">{data.members.length}</span><span className="caps">{plural(data.members.length, ["участник", "участника", "участников"])}</span></div>
           <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.sessions, 0)}</span><span className="caps">сессий за период</span></div>
-          <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.training_minutes, 0)}</span><span className="caps">минут тренировок</span></div>
+          <div className="fact"><span className="num">{Math.round(data.members.reduce((a, m) => a + m.training_minutes, 0))}</span><span className="caps">минут тренировок</span></div>
         </div>
       </Scene>
       <div className="body grid2 org">
@@ -216,7 +216,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
               </div>
               <div className="mstats">
                 <span><b className="num">{m.sessions}</b>{plural(m.sessions, ["сессия", "сессии", "сессий"])}<i><i style={{ width: `${(m.sessions / max) * 100}%` }} /></i></span>
-                <span><b className="num">{m.training_minutes}</b>минут</span>
+                <span><b className="num">{Math.round(m.training_minutes)}</b>минут</span>
                 <span><b className="num">{pct(m.in_zone_share)}</b>в целевой зоне</span>
               </div>
               {Object.keys(m.axes).length > 0 && (
