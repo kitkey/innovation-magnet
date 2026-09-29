@@ -9,3 +9,4 @@ backend/static/
 .pytest_cache/
 *.log
 *.tsbuildinfo
+backend/uploads/

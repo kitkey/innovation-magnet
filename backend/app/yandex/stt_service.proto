@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package speechkit.stt.v3;
+
+import "stt.proto";
+
+// Только потоковое распознавание из yandex/cloud/ai/stt/v3/stt_service.proto, без HTTP-аннотаций и асинхронного API
+service Recognizer {
+  rpc RecognizeStreaming(stream StreamingRequest) returns (stream StreamingResponse);
+}
