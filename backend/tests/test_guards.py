@@ -240,3 +240,11 @@ def test_statement_is_not_a_question_and_if_with_value_is_trade():
     assert "conditional_trade" in m.labels and m.proposed_value == 3
     m = fix(ALABUGA, "Расскажите, что для вас важно в этом проекте.", ["interest_question"])
     assert "interest_question" in m.labels
+
+
+def test_strip_speaker_trailing_own_name():
+    from app.seeds import SEEDS
+    card = next(c for c in SEEDS.values() if c.opponent_name == "Ольга Кравец")
+    assert llm.strip_speaker(card, "Цена уже озвучена, Ольга Кравец.") == "Цена уже озвучена."
+    assert llm.strip_speaker(card, "Ольга Кравец: Добрый день.") == "Добрый день."
+    assert llm.strip_speaker(card, "Меня зовут Ольга Кравец, я отвечаю за продажи.") == "Меня зовут Ольга Кравец, я отвечаю за продажи."
