@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { api, fmtValue, HintOut, Message, MODE_KEY, Mood, ScenarioCard, SessionView, store, TurnOut, unitParts, VoiceStatus } from "./api";
+import { api, fmtShort, fmtValue, HintOut, isOrdinal, Message, MODE_KEY, Mood, optIndex, ScenarioCard, SessionView, store, TurnOut, unitParts, VoiceStatus } from "./api";
 import type { Say } from "./avatar/Avatar3D";
 import { CoachCorner, CoachPanel, coachTips, InlineHint } from "./Coach";
 import { Icon } from "./icons";
 import { hasGuide, MethodGuide, methodName } from "./methods";
 import OpponentAvatar, { OpponentMode } from "./OpponentAvatar";
-import { ACTIVE_KEY, cap, Delta, Go, hhmm, initials, Marks, meters, oppName, parseAt, RU, STYLE_RU, turnStates, who } from "./shared";
+import { ACTIVE_KEY, cap, Delta, Go, hhmm, initials, Marks, meters, oppName, parseAt, plural, RU, STYLE_RU, turnStates, who } from "./shared";
 import Recorder from "./voice/Recorder";
 
 const MOOD_RU: Record<Mood, [string, string]> = {
@@ -27,9 +27,38 @@ function ModeTabs({ mode, setMode }: { mode: OpponentMode; setMode: (m: Opponent
   );
 }
 
+/** Шкала вариантов: деления по порядку от лучшего для игрока, с подписями. На телефоне — номера и текст текущего варианта собеседника. */
+function OptionScale({ card, position }: { card: ScenarioCard; position: number }) {
+  const z = card.target_zone;
+  const opts = z.options ?? [];
+  const me = optIndex(z, z.user_start), st = optIndex(z, z.opponent_start), now = optIndex(z, position);
+  const tags = (i: number) => [i === me && <em key="me" className="me">ваш старт</em>, i === now && <em key="opp" className="opp">собеседник</em>,
+    i === st && i !== now && <em key="st" className="st">его старт</em>];
+  const cls = (i: number) => [i === me && "me", i === now && "opp", i === st && i !== now && "st", i >= me && i < now && "run"].filter(Boolean).join(" ");
+  return (
+    <div className="pos ord">
+      <div className="caps">{cap(z.unit)}</div>
+      <ol className="olist" aria-label={`Варианты от лучшего для вас. Ваш старт: ${opts[me]}. Собеседник сейчас: ${opts[now]}`}>
+        {opts.map((o, i) => (
+          <li key={i} className={cls(i)}>
+            <span className="on num">{i + 1}</span>
+            <span className="ot">{o}{tags(i).some(Boolean) && <span className="otags">{tags(i)}</span>}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="ochips" aria-hidden="true">
+        {opts.map((_, i) => <span key={i} className={cls(i)}>{i + 1}</span>)}
+        <span className="olegend"><i className="me" />вы <i className="opp" />собеседник</span>
+      </div>
+      <p className="onow"><b>Собеседник, №{now + 1}:</b> {opts[now]}</p>
+    </div>
+  );
+}
+
 /** Шкала торга: только то, что игрок уже знает — своя стартовая позиция, старт и текущая позиция собеседника. Целевая зона не показывается. */
 function PriceScale({ card, position }: { card: ScenarioCard; position: number }) {
   const z = card.target_zone;
+  if (isOrdinal(z)) return <OptionScale card={card} position={position} />;
   const { subject, short } = unitParts(z.unit);
   const vals = [z.user_start, z.opponent_start, position];
   const lo = Math.min(...vals), hi = Math.max(...vals) === lo ? lo + 1 : Math.max(...vals);
@@ -53,7 +82,8 @@ function PriceScale({ card, position }: { card: ScenarioCard; position: number }
 /** Бриф: только то, что знает игрок. Скрытые интересы, альтернатива собеседника и целевая зона сюда не попадают. */
 function BriefBody({ card, clamp }: { card: ScenarioCard; clamp: boolean }) {
   const [full, setFull] = useState(false);
-  const { subject, short } = unitParts(card.target_zone.unit);
+  const z = card.target_zone;
+  const { subject, short } = unitParts(z.unit);
   return (
     <>
       {card.context && <section><span className="caps">Ситуация</span>
@@ -63,7 +93,9 @@ function BriefBody({ card, clamp }: { card: ScenarioCard; clamp: boolean }) {
       <section><span className="caps">Ваша роль</span><p>{card.user_role}</p></section>
       <section><span className="caps">Ваша цель</span><p>{card.user_goal}</p></section>
       {card.user_batna && <section><span className="caps">Ваша альтернатива</span><p>{card.user_batna}{card.method === "batna" && ". Если сделка хуже неё, можно выйти из переговоров."}</p></section>}
-      <section><span className="caps">Предмет торга</span><p>{cap(subject || card.topic)} ({short}); вы начинаете с {fmtValue(card.target_zone.user_start, card.target_zone.unit)}</p></section>
+      {isOrdinal(z)
+        ? <section><span className="caps">Предмет торга</span><p>{cap(z.unit)}: {z.options!.length} {plural(z.options!.length, "вариант", "варианта", "вариантов")} по порядку, от лучшего для вас; вы начинаете с «{fmtValue(z.user_start, z)}»</p></section>
+        : <section><span className="caps">Предмет торга</span><p>{cap(subject || card.topic)} ({short}); вы начинаете с {fmtValue(z.user_start, z)}</p></section>}
     </>
   );
 }
@@ -242,7 +274,7 @@ export default function Dialog({ sid, go }: { sid: string; go: Go }) {
             <div><span className="caps">Доверие</span><b className="num">{m.trust}{d("trust") !== 0 && <span><Delta d={d("trust")} /></span>}</b></div>
             <div><span className="caps">Терпение</span><b className="num">{m.patience}{d("patience") !== 0 && <span><Delta d={d("patience")} /></span>}</b></div>
             <div><span className="caps">Уступить</span><b className="num">{m.readiness}{d("readiness") !== 0 && <span><Delta d={d("readiness")} /></span>}</b></div>
-            <div><span className="caps">Позиция</span><b className="num">{fmtValue(s.state.position, card.target_zone.unit)}</b></div>
+            <div><span className="caps">Позиция</span><b className="num">{fmtShort(s.state.position, card.target_zone)}</b></div>
           </div>
           <PriceScale card={card} position={s.state.position} />
         </aside>

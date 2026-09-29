@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from . import characters
+from .engine import offline
 from .schemas import DOMAIN_ICONS, ScenarioCard, TargetZone
 
 
@@ -49,7 +50,7 @@ INTRO = """Ты собираешь карточку учебного сцена�
 - Все поля обязательны, кроме opponent_name, если имя нельзя подобрать. Верни только поля схемы."""
 
 ZONE_RULES = """## target_zone — целевая зона, самое важное поле
-Тренажёр торгуется по одному числу. Сначала определи, что это за число, и в какую сторону оно лучше для игрока: player_wants.
+Тренажёр торгуется по одному числу или по шкале словесных вариантов (о ней ниже). Сначала определи, что это за число, и в какую сторону оно лучше для игрока: player_wants.
 - unit: предмет торга и единица через запятую, предмет первым. «аренда квартиры в месяц, тыс. руб.», «срок сдачи презентации, рабочих дней», \
 «рост цены поставки, %», «скидка на партию, %», «сколько экранов делает Дима, экранов». Без запятой и без единицы нельзя. \
 Плохо: «руб.», «цена», «%», «зарплата, 150».
@@ -70,7 +71,26 @@ unit «стоимость сайта, тыс. руб.», user_start 120, zone_mi
 Пример, player_wants = more: директор даёт на обучение команды 50 тыс., нужно 90, без 70 курс не собрать. \
 unit «бюджет на обучение команды, тыс. руб.», user_start 90, zone_min 70, zone_max 85, opponent_start 50.
 Плохо: user_start 50 и opponent_start 90 во втором примере (перепутаны стороны); зона 50–90 (включает старт собеседника); \
-user_start 12 при торге о скидке в %, если 12 — это число заказанных станков."""
+user_start 12 при торге о скидке в %, если 12 — это число заказанных станков.
+
+### Когда предмет торга не число — шкала вариантов options
+Бывает, что стороны спорят не о сумме или сроке, а о том, какое условие попадёт в договор или договорённость: \
+оставить ли пункт о штрафе, как платить, в каком формате работать. Если в описании нет одного числа, которое двигают \
+туда-сюда, а есть несколько словесных вариантов, заполни options.
+- options: 2–8 коротких формулировок строго по порядку, от лучшего для игрока к худшему. Каждая — законченное условие, \
+которое можно вписать в договор, 3–10 слов, без номера в начале. Варианты не повторяют друг друга.
+- unit: предмет торга словами, без запятой и единицы: «пункт о допработах при срыве срока», «схема оплаты проекта».
+- user_start, zone_min, zone_max, opponent_start: номера вариантов из options, считая с 1. Первый вариант лучший для игрока, \
+поэтому user_start <= zone_min <= zone_max < opponent_start; player_wants — less.
+- opening и opponent_goal называют стартовый вариант собеседника словами, близко к формулировке из options.
+- Если торг всё же сводится к одному числу (сумма, дни, проценты), options оставь пустым и заполни числа, как выше.
+Пример: подрядчик и заказчик спорят о пункте про допработы при срыве срока. unit «пункт о допработах при срыве срока», \
+options [«Пункта нет, допработы оплачиваются отдельно», «Допработы за свой счёт, но не больше 5 рабочих дней», \
+«Допработы за свой счёт без лимита», «Допработы за свой счёт и штраф 0,1 % в день»], user_start 1, zone_min 1, zone_max 2, opponent_start 4.
+Пример: фрилансер договаривается об оплате. unit «схема оплаты проекта», options [«Предоплата 100 %», \
+«Предоплата 50 %, остальное после сдачи», «Оплата после сдачи»], user_start 1, zone_min 1, zone_max 2, opponent_start 3.
+Плохо: options от худшего для игрока к лучшему; варианты «да» и «нет» без сути; номера с нуля; options в торге о цене квартиры, \
+где спорят об одном числе; числа из формулировок в user_start при заданных options (50 вместо номера варианта 2)."""
 
 FIELDS: list[Block] = [
     Block("title", "название сценария",
@@ -154,7 +174,8 @@ FIELDS: list[Block] = [
           "Тренажёр проверяет, прозвучали ли они.",
           "«запуск до начала сезона», «блог во второй версии»", "«скидка», «цена», «сайт»; целые предложения из описания"),
     Block("opening", "первая реплика собеседника",
-          "первая фраза собеседника вслух, 2–3 предложения, со стартовым числом opponent_start цифрами; без названия должности",
+          "первая фраза собеседника вслух, 2–3 предложения, со стартовым числом opponent_start цифрами "
+          "(при шкале вариантов — со стартовым вариантом словами); без названия должности",
           "Что собеседник говорит первым, как живой человек в своём характере. Обозначает суть вопроса и свою стартовую позицию: "
           "число opponent_start цифрами и словами разговора, а не «моя стартовая позиция». Не называет свою должность, "
           "не представляется, не раскрывает скрытые интересы, не говорит за игрока. Начинается с заглавной буквы.",
@@ -185,7 +206,8 @@ FIELDS: list[Block] = [
 
 FOOTER = """Перед ответом проверь себя: title — не имя; unit с запятой; порядок пяти чисел соответствует player_wants; \
 зона не включает opponent_start; opening содержит opponent_start цифрами и не называет должность; context от второго лица \
-и объясняет, откуда числа; coach_tips и hints не заполняй — их пишет автор сценария."""
+и объясняет, откуда числа; при шкале вариантов options идут от лучшего для игрока к худшему, позиции — номера с 1, \
+opening называет вариант собеседника словами; coach_tips и hints не заполняй — их пишет автор сценария."""
 
 SHORT = {b.key: b.short for b in FIELDS}
 
@@ -208,15 +230,29 @@ FIELD_RU = {"title": "название", "domain": "сфера", "topic": "те�
 
 
 class GeneratedZone(BaseModel):
-    player_wants: Literal["more", "less"] = Field(description="more — игроку лучше большее число, less — меньшее")
-    unit: str = Field(description="предмет торга и единица через запятую, предмет первым: «аренда в месяц, тыс. руб.»")
-    user_start: float = Field(description="с чего игрок открывает торг, в единице unit")
-    zone_min: float = Field(description="меньший край целевой зоны игрока")
-    zone_max: float = Field(description="больший край целевой зоны игрока")
-    opponent_start: float = Field(description="первое требование собеседника, в единице unit")
+    player_wants: Literal["more", "less"] = Field(description="more — игроку лучше большее число, less — меньшее; при options — less")
+    unit: str = Field(description="предмет торга и единица через запятую, предмет первым: «аренда в месяц, тыс. руб.»; "
+                      "при options — предмет торга словами")
+    user_start: float = Field(description="с чего игрок открывает торг, в единице unit; при options — номер варианта с 1")
+    zone_min: float = Field(description="меньший край целевой зоны игрока; при options — номер варианта с 1")
+    zone_max: float = Field(description="больший край целевой зоны игрока; при options — номер варианта с 1")
+    opponent_start: float = Field(description="первое требование собеседника, в единице unit; при options — номер варианта с 1")
+    options: list[str] = Field(default_factory=list, description="только если торг не о числе: 2–8 формулировок условия "
+                               "от лучшего для игрока к худшему; иначе пусто")
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _options(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            v = re.split(r"[\n;]+", v)
+        return [re.sub(r"^\s*\d+[.)]\s*", "", str(x)).strip(" .•-«»\"") for x in v if str(x or "").strip(" .•-«»\"")]
 
     @model_validator(mode="after")
     def _check(self):
+        if self.options:
+            return self._check_options()
         self.unit = self.unit.strip().strip(",").strip()
         if not self.unit or not re.search(r"[^\W\d_]|%", self.unit):
             raise ValueError("unit пустой: напиши предмет торга и единицу через запятую, например «аренда в месяц, тыс. руб.»")
@@ -246,7 +282,40 @@ class GeneratedZone(BaseModel):
                              "чем старт собеседника")
         return self
 
+    def _check_options(self):
+        """Шкала вариантов: номера с 1, от лучшего для игрока. Перевёрнутую зону и старт игрока внутри зоны чиним, остальное возвращаем модели."""
+        self.unit = self.unit.strip().strip(",").strip()
+        if not re.search(r"[^\W\d_]", self.unit):
+            raise ValueError("unit пустой: при options напиши предмет торга словами, например «пункт о штрафе за просрочку»")
+        n = len(self.options)
+        if not 2 <= n <= 8:
+            raise ValueError(f"в options {n} вариантов, а нужно от 2 до 8")
+        if len({o.lower() for o in self.options}) < n:
+            raise ValueError("в options есть одинаковые варианты: у каждого должна быть своя формулировка")
+        for name in ("user_start", "zone_min", "zone_max", "opponent_start"):
+            v = getattr(self, name)
+            if v != int(v) or not 1 <= v <= n:
+                raise ValueError(f"{name} = {v:g}, а при options это номер варианта от 1 до {n}")
+        self.player_wants = "less"
+        if self.zone_min > self.zone_max:
+            self.zone_min, self.zone_max = self.zone_max, self.zone_min
+        u, o, lo, hi = self.user_start, self.opponent_start, self.zone_min, self.zone_max
+        if u == o:
+            raise ValueError(f"user_start и opponent_start — один и тот же вариант {u:g}: стороны должны начинать с разных вариантов")
+        if u > o:
+            raise ValueError(f"user_start = {u:g} больше opponent_start = {o:g}: options идут от лучшего для игрока к худшему, "
+                             "значит вариант игрока стоит в списке раньше; проверь порядок options")
+        if u > lo:
+            self.user_start = u = lo
+        if hi >= o:
+            raise ValueError(f"целевая зона {lo:g}–{hi:g} включает старт собеседника {o:g} или заходит за него: "
+                             "худший край зоны должен стоять в списке раньше варианта собеседника")
+        return self
+
     def to_zone(self) -> TargetZone:
+        if self.options:
+            return TargetZone(unit=self.unit, options=self.options, user_start=self.user_start - 1, zone_min=self.zone_min - 1,
+                              zone_max=self.zone_max - 1, opponent_start=self.opponent_start - 1)
         return TargetZone(unit=self.unit, user_start=self.user_start, zone_min=self.zone_min, zone_max=self.zone_max, opponent_start=self.opponent_start)
 
 
@@ -265,7 +334,8 @@ class GeneratedCard(BaseModel):
     opponent_hidden_interests: list[str] = Field(default_factory=list, description=SHORT["opponent_hidden_interests"])
     user_batna: str = Field(default="", description=SHORT["user_batna"])
     opponent_batna: str = Field(default="", description=SHORT["opponent_batna"])
-    target_zone: GeneratedZone = Field(description="целевая зона: одно число торга, направление и пять чисел в одной единице")
+    target_zone: GeneratedZone = Field(description="целевая зона: одно число торга, направление и пять чисел в одной единице; "
+                                       "или шкала словесных вариантов options, если торг не о числе")
     context: str = Field(min_length=1, description=SHORT["context"])
     mandatory_details: list[str] = Field(default_factory=list, description=SHORT["mandatory_details"])
     opening: str = Field(default="", description=SHORT["opening"])
@@ -334,7 +404,14 @@ def fix_opening(text: str, card: GeneratedCard) -> str:
     for n in sorted({card.opponent_role.strip(), card.opponent_name.strip()} - {""}, key=len, reverse=True):
         if t.lower().startswith(n.lower()) and t[len(n):].lstrip()[:1] in (":", "—", "-"):
             t = t[len(n):].lstrip()[1:].lstrip()
-    if not t or not _says_number(t, card.target_zone.opponent_start) or re.search(r"стартов\w* позици", t, re.I):
+    z = card.target_zone
+    if z.options:  # вариант собеседника должен узнаваться по словам, как в диалоге
+        named = offline.option_index(z.to_zone(), t)
+        if named != z.opponent_start - 1:
+            t = ""
+    elif t and not _says_number(t, z.opponent_start):
+        t = ""
+    if not t or re.search(r"стартов\w* позици", t, re.I):
         return ""
     return t[0].upper() + t[1:]
 

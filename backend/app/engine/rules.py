@@ -1,7 +1,10 @@
 """Детерминированная механика собеседника: разметка хода двигает счётчики, счётчики решают об уступке и исходе.
 
 LLM здесь не участвует. Одинаковые разметки ходов дают одинаковый исход, это требование воспроизводимости для жюри.
+На шкале вариантов позиции — номера вариантов (0 — лучший для игрока), и уступка сдвигает собеседника на соседний вариант.
 """
+import math
+
 from ..schemas import MoveAnalysis, OpponentState, Outcome, ScenarioCard
 
 LABEL_EFFECTS = {
@@ -64,14 +67,19 @@ def _direction(card: ScenarioCard) -> int:
 
 
 def plausible_range(card: ScenarioCard) -> tuple[float, float]:
-    """Какие значения вообще можно считать предложением в единицах торга: от половины меньшего края до полутора большего."""
+    """Какие значения вообще можно считать предложением в единицах торга: от половины меньшего края до полутора большего.
+    На шкале вариантов — любой номер варианта."""
     z = card.target_zone
+    if z.ordinal:
+        return 0, len(z.options) - 1
     edges = [abs(v) for v in (z.user_start, z.zone_min, z.zone_max, z.opponent_start)]
     return 0.5 * min(edges), 1.5 * max(edges)
 
 
 def is_plausible(card: ScenarioCard, value: float) -> bool:
     lo, hi = plausible_range(card)
+    if card.target_zone.ordinal and value != int(value):
+        return False
     return lo <= value <= hi
 
 
@@ -84,7 +92,10 @@ def opponent_limit(card: ScenarioCard) -> float:
     z = card.target_zone
     near, far = (z.zone_max, z.zone_min) if _direction(card) > 0 else (z.zone_min, z.zone_max)
     share = DIFFICULTY[card.difficulty]["limit_share"]
-    return far + (near - far) * share
+    limit = far + (near - far) * share
+    if z.ordinal:  # между вариантами остановиться нельзя: половина пути округляется к игроку
+        return float(math.floor(limit + 1e-9))
+    return limit
 
 
 def zone_boundary(card: ScenarioCard) -> float:
@@ -118,7 +129,7 @@ def apply_move(card: ScenarioCard, state: OpponentState, move: MoveAnalysis) -> 
     conceded = False
     threshold = DIFFICULTY[card.difficulty]["concede_threshold"]
     limit = opponent_limit(card)
-    step = abs(limit - card.target_zone.opponent_start) / CONCESSION_STEPS
+    step = 1.0 if card.target_zone.ordinal else abs(limit - card.target_zone.opponent_start) / CONCESSION_STEPS
     d = _direction(card)
     walking_away = "walk_away" in labels  # переговоры на этом ходу заканчиваются, выход оценивается по позиции до хода
     if not walking_away and s.readiness >= threshold and s.trust >= 0 and d * (limit - s.position) > 1e-9:

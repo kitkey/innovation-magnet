@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, fmtValue, SessionResult, SessionView, store, unitParts } from "./api";
+import { api, fmtValue, isOrdinal, optIndex, SessionResult, SessionView, store, TargetZone, zoneSubject } from "./api";
 import { ART, Scene } from "./art";
 import { Icon } from "./icons";
 import { ACTIVE_KEY, cap, dayLabel, Go, hhmm, Marks, meters, OUTCOME, outcomeTone, parseAt, sessionScore, startScenario, turnStates } from "./shared";
@@ -80,8 +80,9 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
   const times = (s?.messages ?? []).map((m) => parseAt(m.at)).filter((d): d is Date => !!d);
   const dur = times.length > 1 ? Math.max(0, Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 1000)) : null;
   const score = card && r.judge ? sessionScore(r.judge.axes, card.difficulty, r.outcome, !!r.walk_away_justified) : null;
-  const unit = card?.target_zone.unit ?? "";
-  const subject = cap(unitParts(unit).subject || "итог");
+  const zone: TargetZone = card?.target_zone ?? { unit: "", user_start: 0, zone_min: 0, zone_max: 0, opponent_start: 0 };
+  const ordinal = isOrdinal(zone);
+  const subject = cap(zoneSubject(zone) || "итог");
   const findTurn = (quote: string) => {
     const q = norm(quote);
     const i = users.findIndex((u) => norm(u.text).includes(q) || (q.length > 12 && q.includes(norm(u.text))));
@@ -101,7 +102,9 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
             <span className={`omark ${tone}`}><span className="dot" />Исход</span>
             <h1>{title}</h1>
             <div className="facts">
-              {r.final_position !== null && <div className="fact"><span className="num">{fmtValue(r.final_position, unit)}</span><span className="caps">{subject}</span></div>}
+              {r.final_position !== null && (ordinal
+                ? <div className="fact"><span className="num">{optIndex(zone, r.final_position) + 1} из {zone.options!.length}</span><span className="caps">вариант</span></div>
+                : <div className="fact"><span className="num">{fmtValue(r.final_position, zone)}</span><span className="caps">{subject}</span></div>)}
               {s && <div className="fact"><span className="num">{s.turn} / {s.max_turns}</span><span className="caps">ходов</span></div>}
               {dur !== null && dur > 0 && <div className="fact"><span className="num">{Math.floor(dur / 60)}:{String(dur % 60).padStart(2, "0")}</span><span className="caps">длительность</span></div>}
               {score !== null && <div className="fact"><span className="num">{score}</span><span className="caps">балл за сессию</span></div>}
@@ -109,7 +112,9 @@ export default function Result({ sid, go }: { sid: string; go: Go }) {
             {(r.final_position !== null || r.details_covered.length + r.details_missed.length > 0) && (
               <div className="terms">
                 <span className="caps">{r.final_position !== null ? "Условия сделки" : "Детали"}</span>
-                {r.final_position !== null && <span><span className={`dot ${r.in_zone ? "good" : "bad"}`} />{subject} <b>{fmtValue(r.final_position, unit)}</b>{r.in_zone === false && " — вне цели"}</span>}
+                {r.final_position !== null && (ordinal
+                  ? <span className="tlw"><span className={`dot ${r.in_zone ? "good" : "bad"}`} /><span className="tl">{subject}: <b>{fmtValue(r.final_position, zone)}</b>{r.in_zone === false && " — вне цели"}</span></span>
+                  : <span><span className={`dot ${r.in_zone ? "good" : "bad"}`} />{subject} <b>{fmtValue(r.final_position, zone)}</b>{r.in_zone === false && " — вне цели"}</span>)}
                 {r.details_covered.map((d) => <span key={d}><span className="dot good" />{cap(d)} — обсудили</span>)}
                 {r.details_missed.map((d) => <span key={d}><span className="dot bad" />{cap(d)} — не обсуждали</span>)}
               </div>

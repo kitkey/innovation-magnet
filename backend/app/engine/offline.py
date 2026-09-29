@@ -5,7 +5,7 @@
 import math
 import re
 
-from ..schemas import JudgeReport, KeyMoment, MoveAnalysis, OpponentState, ScenarioCard
+from ..schemas import JudgeReport, KeyMoment, MoveAnalysis, OpponentState, ScenarioCard, TargetZone
 from . import rules
 
 MARKERS = {
@@ -139,8 +139,92 @@ def _unit_scale(unit: str) -> float:
     return next((v for k, v in SCALE.items() if k in low), 1.0)
 
 
+# Шкала вариантов: какой вариант назван в реплике. Сначала явный номер («вариант 2», «второй вариант»),
+# потом ключевые слова формулировок. Слово весит тем больше, чем в меньшем числе вариантов оно встречается;
+# слова из предмета торга и общие для всех вариантов не считаются. «Не больше 5 дней» и «5 дней» различаются
+# по отрицанию перед словом. При равном весе выигрывает вариант, чьих слов названо больше в доле; полная ничья — не распознан.
+OPTION_NUMBER = re.compile(r"(?:вариант\w*|№)\s*(?:номер\s*)?(\d)(?!\d)")
+OPTION_ORDINAL = re.compile(r"(?<![а-яa-z])(перв|втор|трет|четв|пят|шест|седьм|восьм)\w*\s+вариант")
+ORDINALS = {"перв": 1, "втор": 2, "трет": 3, "четв": 4, "пят": 5, "шест": 6, "седьм": 7, "восьм": 8}
+NUM_WORDS = {"один": "1", "одного": "1", "одним": "1", "два": "2", "двух": "2", "двумя": "2", "три": "3", "трех": "3", "тремя": "3",
+             "четыре": "4", "четырех": "4", "пять": "5", "пяти": "5", "пятью": "5", "шесть": "6", "шести": "6", "семь": "7", "семи": "7",
+             "восемь": "8", "восьми": "8", "десять": "10", "десяти": "10"}
+TERM = re.compile(r"[a-zа-я]+|\d+(?:\.\d+)?")
+NEGATED = re.compile(r"(?<![а-яa-z])(не|без|никаких|никакого|никакой|нет)\s+$")
+NO_WORD = re.compile(r"(?<![а-яa-z])нет(?![а-яa-z])")
+REMOVAL = ("убра", "убер", "исключ", "вычерк", "удали", "удалит", "без пункт", "без этого пункт", "без такого пункт", "пункта нет",
+           "пункта не будет", "не включа", "отказаться от пункт", "отказ от пункт", "пункт не нужен", "пункт лишн")
+
+
+def _low(text: str) -> str:
+    low = re.sub(r"(?<=\d),(?=\d)", ".", text.lower().replace("ё", "е"))
+    return re.sub(r"[а-я]+", lambda m: NUM_WORDS.get(m.group(), m.group()), low)
+
+
+def _terms(text: str) -> set[tuple[str, bool]]:
+    """Основы слов длиной от четырёх букв и числа, с отметкой «стоит после не/без»."""
+    low, out = _low(text), set()
+    for m in TERM.finditer(low):
+        w = m.group()
+        if not w[0].isdigit():
+            if len(w) < 4:
+                continue
+            w = w[:max(4, min(len(w) - 2, 6))]
+        out.add((w, bool(NEGATED.search(low[max(0, m.start() - 12):m.start()]))))
+    return out
+
+
+def _occurrences(term: str, low: str):
+    """Вхождения основы с начала слова («оплат» не находится в «предоплата») или числа целиком."""
+    edge = r"(?<![\d.])" if term[0].isdigit() else r"(?<![а-яa-z0-9])"
+    tail = r"(?![\d]|\.\d)" if term[0].isdigit() else ""
+    return re.finditer(edge + re.escape(term) + tail, low)
+
+
+def _has(term: str, low: str) -> bool:
+    return next(_occurrences(term, low), None) is not None
+
+
+def _found(term: str, neg: bool, low: str) -> bool:
+    return any(bool(NEGATED.search(low[max(0, m.start() - 12):m.start()])) == neg for m in _occurrences(term, low))
+
+
+def option_index(zone: TargetZone, text: str) -> int | None:
+    """Номер варианта (с нуля), который назван в тексте, или None."""
+    low = _low(text)
+    m = OPTION_NUMBER.search(low)
+    k = int(m.group(1)) if m else next((ORDINALS[o.group(1)] for o in OPTION_ORDINAL.finditer(low)), None)
+    if k is not None and 1 <= k <= len(zone.options):
+        return k - 1
+    opts = [_low(o) for o in zone.options]
+    subject = _low(zone.unit)
+    scores = []
+    for i, opt in enumerate(opts):
+        score, hits, terms = 0.0, 0, 0
+        for term, neg in _terms(zone.options[i]):
+            share = sum(_has(term, o) for o in opts)
+            if share == len(opts) or _has(term, subject):
+                continue
+            terms += 1
+            if _found(term, neg, low):
+                score, hits = score + 1 / share, hits + 1
+        if NO_WORD.search(opt):
+            terms += 1
+            if any(r in low for r in REMOVAL):
+                score, hits = score + 1 / sum(bool(NO_WORD.search(o)) for o in opts), hits + 1
+        scores.append((round(score, 6), hits / terms if terms else 0.0))  # при равном весе выигрывает вариант, названный полнее
+    best = max(scores)
+    if best[0] <= 0 or scores.count(best) > 1:
+        return None
+    return scores.index(best)
+
+
 def values(card: ScenarioCard, text: str) -> list[float]:
-    """Все числа из текста, которые правдоподобны как значение в единицах торга; с совпадающей единицей идут первыми."""
+    """Все числа из текста, которые правдоподобны как значение в единицах торга; с совпадающей единицей идут первыми.
+    На шкале вариантов — номер распознанного варианта."""
+    if card.target_zone.ordinal:
+        i = option_index(card.target_zone, text)
+        return [] if i is None else [float(i)]
     unit = card.target_zone.short_unit.lower()
     unit_scale = _unit_scale(unit)
     percent_unit = "%" in unit or "процент" in unit
@@ -216,6 +300,7 @@ def analyze(card: ScenarioCard, message: str) -> MoveAnalysis:
 
 def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded: bool) -> str:
     pos = card.target_zone.fmt(state.position)
+    at = card.target_zone.fmt_at(state.position)
     labels = set(move.labels)
     if "manipulation" in labels:
         return f"Давайте без этих приёмов. Моя позиция прежняя: {pos}."
@@ -228,7 +313,7 @@ def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded
     if "interest_question" in labels and card.opponent_hidden_interests and state.trust >= 1:
         return f"Если честно, для меня важно другое: {card.opponent_hidden_interests[0]}."
     if {"boundary", "conditional_trade"} <= labels:
-        return f"Граница понятна, обмен выглядит предметно. Пока я на {pos}: что именно вы готовы зафиксировать со своей стороны?"
+        return f"Граница понятна, обмен выглядит предметно. Пока я {at}: что именно вы готовы зафиксировать со своей стороны?"
     if {"batna_reference", "boundary"} <= labels:
         return "Понимаю вашу альтернативу и предел. Что должно измениться в моём варианте, чтобы он стал для вас лучше альтернативы?"
     if "batna_reference" in labels:
@@ -236,7 +321,7 @@ def reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis, conceded
     if "boundary" in labels:
         return "Вы обозначили предел. Предложите обмен, который позволит не перейти эту границу."
     if "conditional_trade" in labels:
-        return f"Условный обмен конструктивен. Пока я на {pos}: какую ценность получает каждая сторона?"
+        return f"Условный обмен конструктивен. Пока я {at}: какую ценность получает каждая сторона?"
     if "concrete_offer" in move.labels or "accept" in move.labels:
         return f"Пока могу предложить {pos}. Обоснуйте, почему ваш вариант справедлив."
     if "objective_criterion" in move.labels or "argument" in move.labels:
@@ -275,6 +360,17 @@ def batna_axes(moves: list[MoveAnalysis]) -> dict[str, int]:
     return {axis: max(0, min(100, v) - penalty) for axis, v in raw.items()}
 
 
+ORDINAL_WORDING = {
+    "Назовите конкретное предложение в единицах торга и объясните, почему оно справедливо.":
+        "Назовите конкретный вариант условия и объясните, почему он справедлив.",
+    "Назовите конкретное значение в единицах торга.": "Назовите конкретный вариант условия.",
+}
+
+
+def _say(card: ScenarioCard, text: str) -> str:
+    return ORDINAL_WORDING.get(text, text) if card.target_zone.ordinal else text
+
+
 def judge_offline(card: ScenarioCard, turns: list[tuple[str, MoveAnalysis]]) -> JudgeReport:
     """Разбор по правилам: оценки осей метода из доли подходящих меток (у BATNA по счётчикам), ключевые моменты из проблемных ходов."""
     moves = [m for _, m in turns]
@@ -290,10 +386,10 @@ def judge_offline(card: ScenarioCard, turns: list[tuple[str, MoveAnalysis]]) -> 
     for label in ("personal_attack", "manipulation", "pressure", "vague"):
         for text, m in turns:
             if label in m.labels and len(moments) < 3 and all(k.quote != text for k in moments):
-                moments.append(KeyMoment(quote=text, problem=f"В реплике {LABELS_RU[label]}.", better=BETTER[label]))
+                moments.append(KeyMoment(quote=text, problem=f"В реплике {LABELS_RU[label]}.", better=_say(card, BETTER[label])))
     if not moments:
         good, _ = AXIS_LABELS[weak]
         text = next((t for t, m in turns if not good & set(m.labels)), turns[0][0])
-        moments.append(KeyMoment(quote=text, problem=f"Здесь не хватило приёма «{weak}».", better=AXIS_TIPS[weak]))
-    hint = f"Слабее всего ось «{weak}» ({axes[weak]}/100). {AXIS_TIPS[weak]} Пройдите этот же сценарий ещё раз или возьмите сценарий с методом «{METHOD_RU[card.method]}» посложнее."
+        moments.append(KeyMoment(quote=text, problem=f"Здесь не хватило приёма «{weak}».", better=_say(card, AXIS_TIPS[weak])))
+    hint = f"Слабее всего ось «{weak}» ({axes[weak]}/100). {_say(card, AXIS_TIPS[weak])} Пройдите этот же сценарий ещё раз или возьмите сценарий с методом «{METHOD_RU[card.method]}» посложнее."
     return JudgeReport(axes=axes, key_moments=moments, next_scenario_hint=hint)

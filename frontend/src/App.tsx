@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile } from "./account";
 import { ART, autoIcon, Empty, GROUP_ICONS, iconSrc, Scene } from "./art";
-import { api, AUTH_KEY, Character, Hint, HistoryItem, Scenario, ScenarioCard, store, User } from "./api";
+import { api, AUTH_KEY, Character, Hint, HistoryItem, isOrdinal, Scenario, ScenarioCard, store, TargetZone, User } from "./api";
 import Dialog from "./Dialog";
 import Home, { SessionRow } from "./Home";
 import { Icon } from "./icons";
@@ -178,6 +178,100 @@ function IconPicker({ domain, value, onChange }: { domain: string; value: string
   );
 }
 
+const POS_KEYS = ["user_start", "zone_min", "zone_max", "opponent_start"] as const;
+const PATH = { up: "M4 10l4-4 4 4", down: "M4 6l4 4 4-4", del: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" };
+const Svg = ({ d }: { d: string }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d={d} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+const OPT_PLACEHOLDER = ["Пункта нет, допработы оплачиваются отдельно", "Допработы за свой счёт, но не больше 5 рабочих дней",
+  "Допработы за свой счёт без лимита", "Допработы за свой счёт и штраф 0,1 % в день"];
+
+/** Перед сохранением: пустые варианты выкидываем, позиции сдвигаем вслед за текстом. */
+function cleanZone(z: TargetZone): TargetZone {
+  if (!z.options || !z.options.length) return { ...z, options: [] };
+  const keep = z.options.map((o, i) => [o.trim(), i] as [string, number]).filter(([o]) => o);
+  if (keep.length < 2) throw new Error("Добавьте хотя бы два варианта с текстом или переключите зону на «Числом»");
+  const at = (v: number) => {
+    const k = keep.findIndex(([, i]) => i === v);
+    if (k < 0) throw new Error("Ваш старт, старт собеседника и края зоны должны указывать на варианты с текстом");
+    return k;
+  };
+  const out: TargetZone = { ...z, options: keep.map(([o]) => o) };
+  POS_KEYS.forEach((k) => { out[k] = at(z[k]); });
+  return out;
+}
+
+/** Целевая зона: числом (четыре числа в одной единице) или шкалой вариантов (формулировки от лучшего для вас, позиции — номера). */
+function ZoneField({ zone, onChange }: { zone: TargetZone; onChange: (z: TargetZone) => void }) {
+  const [ord, setOrd] = useState(isOrdinal(zone));
+  const opts = zone.options ?? [];
+  const lbl = (k: string, label: string) => <FieldLabel label={label} help={FIELD_HELP[k]} />;
+  const setNum = (k: string, v: string) => onChange({ ...zone, [k]: k === "unit" ? v : Number(v) });
+  const remap = (f: (v: number) => number, options: string[]) => {
+    const z: TargetZone = { ...zone, options };
+    POS_KEYS.forEach((k) => { z[k] = f(zone[k]); });
+    onChange(z);
+  };
+  const toOptions = () => {
+    setOrd(true);
+    if (!opts.length) onChange({ ...zone, options: ["", "", ""], user_start: 0, zone_min: 0, zone_max: 1, opponent_start: 2 });
+  };
+  const toNumbers = () => { setOrd(false); onChange({ ...zone, options: [] }); };
+  const move = (i: number, j: number) => {
+    const o = [...opts];
+    [o[i], o[j]] = [o[j], o[i]];
+    remap((v) => (v === i ? j : v === j ? i : v), o);
+  };
+  const remove = (i: number) => remap((v) => (v > i ? v - 1 : v === i ? Math.max(0, Math.min(i, opts.length - 2)) : v), opts.filter((_, k) => k !== i));
+  const pick = (k: typeof POS_KEYS[number], label: string, help: string) => (
+    <label>{lbl(help, label)}<select value={zone[k]} onChange={(e) => onChange({ ...zone, [k]: Number(e.target.value) })}>
+      {opts.map((o, i) => <option key={i} value={i}>{i + 1}. {o.trim() || "(пусто)"}</option>)}
+    </select></label>
+  );
+  return (
+    <fieldset className="zone-field"><legend>Целевая зона соглашения</legend>
+      <div className="zone-kind">
+        <FieldLabel label="Как описать торг" help={FIELD_HELP.zone_kind} />
+        <div className="tabs" role="group" aria-label="Вид целевой зоны">
+          <button type="button" className={ord ? "" : "on"} aria-pressed={!ord} onClick={toNumbers}>Числом</button>
+          <button type="button" className={ord ? "on" : ""} aria-pressed={ord} onClick={toOptions}>Вариантами</button>
+        </div>
+      </div>
+      {!ord ? <>
+        <label>{lbl("unit", "Предмет и единица торга через запятую")}<input value={zone.unit} placeholder="стоимость доработки, тыс. руб." onChange={(e) => setNum("unit", e.target.value)} /></label>
+        <label>{lbl("user_start", "Ваша стартовая позиция")}<input type="number" value={zone.user_start} onChange={(e) => setNum("user_start", e.target.value)} /></label>
+        <label>{lbl("zone_min", "Зона от")}<input type="number" value={zone.zone_min} onChange={(e) => setNum("zone_min", e.target.value)} /></label>
+        <label>{lbl("zone_max", "Зона до")}<input type="number" value={zone.zone_max} onChange={(e) => setNum("zone_max", e.target.value)} /></label>
+        <label>{lbl("opponent_start", "Старт собеседника")}<input type="number" value={zone.opponent_start} onChange={(e) => setNum("opponent_start", e.target.value)} /></label>
+        <p className="muted small">Зона лежит между стартовыми позициями сторон и не касается старта собеседника. Пример: вы 29, зона 30–32, собеседник 35.</p>
+      </> : <>
+        <label>{lbl("subject_words", "Предмет торга")}<input value={zone.unit} placeholder="пункт о допработах при срыве срока" onChange={(e) => onChange({ ...zone, unit: e.target.value })} /></label>
+        <div className="opt-list">
+          <FieldLabel label="Варианты, от лучшего для вас к худшему" help={FIELD_HELP.options} />
+          {opts.map((o, i) => (
+            <div key={i} className="opt-row">
+              <span className="opt-n num">{i + 1}</span>
+              <input value={o} maxLength={200} aria-label={`Вариант ${i + 1}`} placeholder={OPT_PLACEHOLDER[i] ?? "Ещё один вариант условия"}
+                onChange={(e) => onChange({ ...zone, options: opts.map((x, k) => (k === i ? e.target.value : x)) })} />
+              <button type="button" className="opt-btn" disabled={i === 0} title="Выше" aria-label={`Поднять вариант ${i + 1}`} onClick={() => move(i, i - 1)}><Svg d={PATH.up} /></button>
+              <button type="button" className="opt-btn" disabled={i === opts.length - 1} title="Ниже" aria-label={`Опустить вариант ${i + 1}`} onClick={() => move(i, i + 1)}><Svg d={PATH.down} /></button>
+              <button type="button" className="opt-btn" disabled={opts.length <= 2} title="Удалить" aria-label={`Удалить вариант ${i + 1}`} onClick={() => remove(i)}><Svg d={PATH.del} /></button>
+            </div>
+          ))}
+          {opts.length < 8 && <button type="button" className="add" onClick={() => onChange({ ...zone, options: [...opts, ""] })}>Добавить вариант</button>}
+        </div>
+        <div className="opt-picks">
+          {pick("user_start", "Ваш старт", "opt_user_start")}
+          {pick("opponent_start", "Старт собеседника", "opt_opponent_start")}
+          {pick("zone_min", "Зона от", "opt_zone")}
+          {pick("zone_max", "Зона до", "opt_zone")}
+        </div>
+        <p className="muted small">Сверху лучший для вас вариант. Ваш старт стоит в списке выше старта собеседника, зона между ними. Пример: вы с 1, зона 1–2, собеседник с 4.</p>
+      </>}
+    </fieldset>
+  );
+}
+
 function lines(v: string) { return v.split("\n").map((x) => x.trim()).filter(Boolean); }
 
 function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go: Go }) {
@@ -186,21 +280,22 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
+  const [genKey, setGenKey] = useState(0);
   const [token, setToken] = useState(store.get("arena.adminToken") ?? "");
   const set = (k: keyof ScenarioCard, v: unknown) => setCard({ ...card, [k]: v });
-  const setZone = (k: string, v: string) => setCard({ ...card, target_zone: { ...card.target_zone, [k]: k === "unit" ? v : Number(v) } });
   const saveToken = (v: string) => { setToken(v); store.set("arena.adminToken", v.trim() || null); };
   const save = async () => {
     setErr("");
-    const clean = { ...card, coach_tips: (card.coach_tips ?? []).map((t) => t.trim()).filter(Boolean), hints: (card.hints ?? []).filter((h) => h.text.trim()) };
     try {
+      const clean = { ...card, target_zone: cleanZone(card.target_zone), coach_tips: (card.coach_tips ?? []).map((t) => t.trim()).filter(Boolean),
+        hints: (card.hints ?? []).filter((h) => h.text.trim()) };
       const s = scenario && !copy ? await api.updateScenario(scenario.id, clean) : await api.createScenario(clean);
       await startScenario(s.id, go, setErr);
     } catch (e) { setErr((e as Error).message); }
   };
   const gen = async () => {
     setErr(""); setBusy(true);
-    try { const g = await api.generate(brief); setCard({ ...g, coach_tips: card.coach_tips, hints: card.hints }); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { const g = await api.generate(brief); setCard({ ...g, coach_tips: card.coach_tips, hints: card.hints }); setGenKey((k) => k + 1); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   const lbl = (k: string, label: string) => <FieldLabel label={label} help={FIELD_HELP[k]} />;
   const text = (k: keyof ScenarioCard, label: string, area = false) => (
@@ -239,14 +334,7 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       {text("opponent_goal", "Цель собеседника", true)}
       <label>{lbl("opponent_hidden_interests", "Скрытые интересы собеседника (по строке)")}<textarea value={card.opponent_hidden_interests.join("\n")} onChange={(e) => set("opponent_hidden_interests", lines(e.target.value))} /></label>
       {text("opponent_batna", "BATNA собеседника")}{text("user_batna", "Ваша BATNA")}
-      <fieldset><legend>Целевая зона соглашения</legend>
-        <label>{lbl("unit", "Предмет и единица торга через запятую")}<input value={card.target_zone.unit} placeholder="стоимость доработки, тыс. руб." onChange={(e) => setZone("unit", e.target.value)} /></label>
-        <label>{lbl("user_start", "Ваша стартовая позиция")}<input type="number" value={card.target_zone.user_start} onChange={(e) => setZone("user_start", e.target.value)} /></label>
-        <label>{lbl("zone_min", "Зона от")}<input type="number" value={card.target_zone.zone_min} onChange={(e) => setZone("zone_min", e.target.value)} /></label>
-        <label>{lbl("zone_max", "Зона до")}<input type="number" value={card.target_zone.zone_max} onChange={(e) => setZone("zone_max", e.target.value)} /></label>
-        <label>{lbl("opponent_start", "Старт собеседника")}<input type="number" value={card.target_zone.opponent_start} onChange={(e) => setZone("opponent_start", e.target.value)} /></label>
-        <p className="muted small">Зона лежит между стартовыми позициями сторон и не касается старта собеседника. Пример: вы 29, зона 30–32, собеседник 35.</p>
-      </fieldset>
+      <ZoneField key={`${scenario?.id ?? "new"}-${genKey}`} zone={card.target_zone} onChange={(z) => set("target_zone", z)} />
       <label>{lbl("mandatory_details", "Обязательные детали (по строке)")}<textarea value={card.mandatory_details.join("\n")} onChange={(e) => set("mandatory_details", lines(e.target.value))} /></label>
       {text("context", "Контекст", true)}
       <label>{lbl("opening", "Первая реплика собеседника")}<textarea value={card.opening ?? ""} placeholder="Если пусто, собеседник начнёт сам: с сути вопроса и своей стартовой позиции"

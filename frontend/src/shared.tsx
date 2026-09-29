@@ -1,4 +1,4 @@
-import { api, fmtValue, Message, Scenario, ScenarioCard, SessionView, store, TurnOut } from "./api";
+import { api, fmtShort, fmtValue, isOrdinal, Message, Scenario, ScenarioCard, SessionView, store, TurnOut } from "./api";
 
 export type View = { name: "list" } | { name: "setup"; scenario?: Scenario; copy?: boolean } | { name: "dialog"; sid: string } | { name: "result"; sid: string } | { name: "history" } | { name: "test" }
   | { name: "auth" } | { name: "profile" } | { name: "org" } | { name: "leaderboard" };
@@ -115,7 +115,9 @@ export function Marks({ m, before, after, card, t, hinted }: { m: Message; befor
       {m.labels.map((l) => <span key={l} className={`lab ${BAD_LABELS.has(l) && !(l === "concession" && m.labels.includes("conditional_trade")) ? "bad" : NEUTRAL_LABELS.has(l) ? "neu" : ""}`}>{LABEL_RU[l] ?? l}</span>)}
       {(shifts.length > 0 || moved) && <>
         <span className="dl">за ход: {shifts.map(([n, d], i) => <span key={n}>{i > 0 && " · "}{n} <Delta d={d} /></span>)}
-          {moved && <>{shifts.length > 0 && " · "}позиция собеседника <b>{fmtValue(before!.position, card.target_zone.unit)} → {fmtValue(after!.position, card.target_zone.unit)}</b></>}
+          {moved && <>{shifts.length > 0 && " · "}позиция собеседника{isOrdinal(card.target_zone)
+            ? <> <b>{fmtShort(before!.position, card.target_zone)} → {fmtShort(after!.position, card.target_zone)}</b> «{fmtValue(after!.position, card.target_zone)}»</>
+            : <> <b>{fmtValue(before!.position, card.target_zone)} → {fmtValue(after!.position, card.target_zone)}</b></>}</>}
         </span>
       </>}
       {hinted && <span className="hintref">подсказка маскота</span>}
