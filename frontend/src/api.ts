@@ -171,7 +171,7 @@ async function call<T>(path: string, init?: RequestInit, json = true): Promise<T
   const r = await fetch(path, { ...init, headers });
   if (!r.ok) {
     const detail = (await r.json().catch(() => ({}))).detail;
-    throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail ?? r.statusText);
+    throw new Error(Array.isArray(detail) ? detail.map((d) => String(d.msg).replace(/^Value error,\s*/i, "")).join("; ") : detail ?? r.statusText);
   }
   return r.json();
 }
