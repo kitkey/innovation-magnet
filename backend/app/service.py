@@ -11,7 +11,7 @@ from sqlalchemy.orm import object_session
 from . import llm, voice
 from .config import settings
 from .db import ScenarioRow, SessionRow, TurnRow
-from .engine import hints, offline, rules
+from .engine import guards, hints, offline, rules
 from .schemas import JudgeReport, MoveAnalysis, OpponentState, ScenarioCard, SessionResult, TurnOut
 
 log = logging.getLogger(__name__)
@@ -104,6 +104,23 @@ def _guard_reply(card: ScenarioCard, state: OpponentState, reply: str, message: 
     return not any(rules.better_for_user(card, v, state.position) and v not in echoed for v in found)
 
 
+def analyze(card: ScenarioCard, history: list[dict], message: str, position: float | None = None) -> MoveAnalysis:
+    """Разметка хода: LLM, затем страховки guards.reconcile по тексту реплики; без LLM — разметка по маркерам."""
+    if not _use_llm():
+        return offline.analyze(card, message)
+    try:
+        raw = llm.analyze_move(card, history, message)
+    except Exception as exc:  # LLM недоступна: переходим на правила, демо не ломается
+        log.warning("analyze_move fallback: %s", exc)
+        return offline.analyze(card, message)
+    if raw.proposed_value is not None and not rules.is_plausible(card, raw.proposed_value):
+        raw.proposed_value = None
+    move = guards.reconcile(card, message, raw, card.target_zone.opponent_start if position is None else position)
+    if move != raw:
+        log.info("labels reconciled: %s %s -> %s %s", raw.labels, raw.proposed_value, move.labels, move.proposed_value)
+    return move
+
+
 def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> TurnOut:
     if row.status != "active":
         raise SessionClosed
@@ -111,18 +128,7 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
     state = OpponentState(**row.state)
     history = _history(row)
 
-    move: MoveAnalysis
-    if _use_llm():
-        try:
-            move = llm.analyze_move(card, history, message)
-            move.mentioned_details = [d for d in move.mentioned_details if d in card.mandatory_details]
-            if move.proposed_value is not None and not rules.is_plausible(card, move.proposed_value):
-                move.proposed_value = None
-        except Exception as exc:  # LLM недоступна: переходим на правила, демо не ломается
-            log.warning("analyze_move fallback: %s", exc)
-            move = offline.analyze(card, message)
-    else:
-        move = offline.analyze(card, message)
+    move = analyze(card, history, message, state.position)
 
     state, conceded = rules.apply_move(card, state, move)
     row.turn += 1
@@ -138,8 +144,12 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
         reply = "Время вышло, к соглашению мы не пришли."
     elif _use_llm():
         try:
-            reply = llm.opponent_reply(card, state, move, conceded, history, message)
-            if not _guard_reply(card, state, reply, message):
+            reply = guards.strip_player_voice(llm.opponent_reply(card, state, move, conceded, history, message),
+                                              [message, *[t.text for t in row.turns if t.role == "user"][-3:]])
+            if not reply:
+                log.warning("opponent_reply spoke only the player's words")
+                reply = offline.reply(card, state, move, conceded)
+            elif not _guard_reply(card, state, reply, message):
                 log.warning("opponent_reply named a value past position %s: %s", state.position, reply)
                 reply = offline.reply(card, state, move, conceded)
         except Exception as exc:
