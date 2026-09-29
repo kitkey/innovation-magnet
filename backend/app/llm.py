@@ -94,6 +94,12 @@ def label_model() -> str:
     return settings.llm_label_model or _pro(settings.llm_model)
 
 
+def opponent_model() -> str:
+    """Реплики собеседника: LLM_OPPONENT_MODEL, иначе основная, а при YandexGPT Lite — YandexGPT Pro:
+    Lite держится за свои прошлые числа и противоречит позиции, которую считают правила."""
+    return settings.llm_opponent_model or _pro(settings.llm_model)
+
+
 def judge_model() -> str:
     """Судья вызывается один раз за сессию; LLM_JUDGE_MODEL, иначе как у разметки."""
     return settings.llm_judge_model or _pro(settings.llm_model)
@@ -186,7 +192,7 @@ def opponent_reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis,
     )
     resp = litellm.completion(
         messages=[{"role": "system", "content": system}, *history[-10:], {"role": "user", "content": _wrap(message)}],
-        **_kwargs(),
+        **_kwargs(opponent_model()),
     )
     return strip_speaker(card, resp.choices[0].message.content.strip())
 
@@ -207,7 +213,7 @@ def opening_line(card: ScenarioCard) -> str:
         + _name(card)
         + _gender(card)
     )
-    resp = litellm.completion(messages=[{"role": "system", "content": system}, {"role": "user", "content": "Начинай разговор."}], **_kwargs())
+    resp = litellm.completion(messages=[{"role": "system", "content": system}, {"role": "user", "content": "Начинай разговор."}], **_kwargs(opponent_model()))
     return strip_speaker(card, resp.choices[0].message.content.strip()).strip("«»\"")
 
 

@@ -101,7 +101,7 @@ npm run dev   # http://localhost:5173
   GIGACHAT_CREDENTIALS=<ключ авторизации>
   ```
 
-Демо-сервер команды работает на YandexGPT Lite (`yandexgpt-lite/latest`): на ней говорит собеседник, а разметку ходов, разбор судьи и генерацию карточек при Lite сам берёт YandexGPT Pro (`LLM_LABEL_MODEL`, `LLM_JUDGE_MODEL`, `LLM_CARDGEN_MODEL`; пустое значение = `LLM_MODEL`, при YandexGPT Lite — YandexGPT Pro). Если `LLM_API_KEY` пуст, а `LLM_API_BASE` указывает на Yandex Cloud, для модели берётся `YANDEX_API_KEY`: одному сервисному аккаунту с ролями `ai.languageModels.user`, `ai.speechkit-stt.user` и `ai.speechkit-tts.user` хватает одного ключа. Запасные модели OpenRouter при этом стоит отключить (`LLM_FALLBACKS=`). Конфигурация GigaChat с живым ключом не проверена.
+В `.env` демо-сервера указана YandexGPT Lite (`yandexgpt-lite/latest`), а собеседника, разметку ходов, разбор судьи и генерацию карточек бэкенд при Lite сам переводит на YandexGPT Pro: Lite держится за свои прошлые числа и противоречит позиции правил (`LLM_OPPONENT_MODEL`, `LLM_LABEL_MODEL`, `LLM_JUDGE_MODEL`, `LLM_CARDGEN_MODEL`; пустое значение = `LLM_MODEL`, при YandexGPT Lite — YandexGPT Pro). Если `LLM_API_KEY` пуст, а `LLM_API_BASE` указывает на Yandex Cloud, для модели берётся `YANDEX_API_KEY`: одному сервисному аккаунту с ролями `ai.languageModels.user`, `ai.speechkit-stt.user` и `ai.speechkit-tts.user` хватает одного ключа. Запасные модели OpenRouter при этом стоит отключить (`LLM_FALLBACKS=`). Конфигурация GigaChat с живым ключом не проверена.
 
 `ADMIN_TOKEN` в `.env` — запасной ключ владельца площадки (поле в форме сценария): с ним можно менять любой сценарий, включая встроенные и зафиксированные. Без токена фиксировать сценарии может только администратор организации.
 

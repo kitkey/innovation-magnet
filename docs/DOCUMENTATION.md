@@ -292,6 +292,7 @@ python -m pytest
 | `LLM_FALLBACKS` | две бесплатные модели OpenRouter | запасные модели через запятую, пусто отключает |
 | `LLM_LABEL_MODEL` | пусто | модель разметки ходов (от неё зависит исход). Если пусто, берётся `LLM_MODEL`, а YandexGPT Lite заменяется на YandexGPT Pro |
 | `LLM_JUDGE_MODEL` | пусто | модель судьи, по тому же правилу |
+| `LLM_OPPONENT_MODEL` | пусто | модель собеседника, по тому же правилу |
 | `LLM_CARDGEN_MODEL` | пусто | модель генерации карточки, по тому же правилу |
 | `LLM_TIMEOUT` | `60` | таймаут вызова LLM, секунд |
 | `DATABASE_URL` | `sqlite:///./arena.db` | строка подключения SQLAlchemy. В compose задана на Postgres |
@@ -310,7 +311,7 @@ LiteLLM сам читает ключи провайдеров из переме�
 
 ### Рекомендуемая конфигурация: YandexGPT и SpeechKit
 
-На этой конфигурации работает демо-сервер команды. Собеседник говорит на YandexGPT Lite, разметку ходов, судью и генерацию карточек бэкенд сам переводит на YandexGPT Pro, если `LLM_LABEL_MODEL`, `LLM_JUDGE_MODEL` и `LLM_CARDGEN_MODEL` пустые. Модели и голос работают на одном API-ключе сервисного аккаунта.
+На этой конфигурации работает демо-сервер команды. В `.env` указана YandexGPT Lite, а собеседника, разметку ходов, судью и генерацию карточек бэкенд сам переводит на YandexGPT Pro, если `LLM_OPPONENT_MODEL`, `LLM_LABEL_MODEL`, `LLM_JUDGE_MODEL` и `LLM_CARDGEN_MODEL` пустые. Модели и голос работают на одном API-ключе сервисного аккаунта.
 
 1. Создайте сервисный аккаунт в Yandex Cloud: https://yandex.cloud/ru/docs/iam/operations/sa/create
 2. Назначьте ему на каталог роли `ai.languageModels.user` (YandexGPT), `ai.speechkit-stt.user` и `ai.speechkit-tts.user` (SpeechKit): https://yandex.cloud/ru/docs/iam/operations/sa/assign-role-for-sa
