@@ -38,17 +38,32 @@ DomainIcon = Literal["procurement", "team", "project", "residents", "career", "s
 DOMAIN_ICONS = get_args(DomainIcon)
 
 
+OPTIONS_MIN, OPTIONS_MAX = 2, 8
+
+
 class TargetZone(BaseModel):
+    """Целевая зона. Два вида: числом (options пуст, позиции в единице unit) и шкалой вариантов (options заданы,
+    позиции — номера вариантов с нуля, 0 — лучший для игрока)."""
     unit: str = Field(min_length=1, description="предмет торга и единица через запятую, предмет первым: «стоимость доработки, тыс. руб.», "
-                      "«срок сдачи, рабочих дней», «рост цены поставки, %»; все четыре числа зоны — в этой единице")
+                      "«срок сдачи, рабочих дней», «рост цены поставки, %»; все четыре числа зоны — в этой единице. "
+                      "Для шкалы вариантов — предмет торга словами: «пункт о допработах при срыве срока»")
     user_start: float = Field(description="первое число, которое называет игрок; лучше для него, чем вся целевая зона, или равно её лучшему краю")
     zone_min: float = Field(description="меньший край целевой зоны: диапазона, где сделка для игрока хорошая; лежит между стартами сторон")
     zone_max: float = Field(description="больший край целевой зоны; худший для игрока край зоны — его граница, дальше выгоднее альтернатива")
     opponent_start: float = Field(description="первое требование собеседника; направление «лучше для игрока» задаёт порядок: "
                                   "игроку лучше большее число, если user_start больше opponent_start, и меньшее — если меньше")
+    options: list[str] = Field(default_factory=list, description="шкала вариантов, когда торг не о числе: 2–8 формулировок от лучшего для игрока "
+                               "к худшему; тогда user_start, zone_min, zone_max, opponent_start — номера вариантов с нуля")
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _clean_options(cls, v):
+        return [re.sub(r"\s+", " ", str(x)).strip() for x in v or [] if str(x or "").strip()]
 
     @model_validator(mode="after")
     def _consistent(self):
+        if self.options:
+            self._check_options()
         if self.zone_min > self.zone_max:
             raise ValueError("Начало целевой зоны больше её конца")
         if self.user_start == self.opponent_start:
@@ -58,18 +73,67 @@ class TargetZone(BaseModel):
             raise ValueError("Целевая зона должна лежать между стартовыми позициями сторон")
         return self
 
+    def _check_options(self) -> None:
+        n = len(self.options)
+        if not OPTIONS_MIN <= n <= OPTIONS_MAX:
+            raise ValueError(f"Вариантов должно быть от {OPTIONS_MIN} до {OPTIONS_MAX}, сейчас {n}")
+        if len({o.lower() for o in self.options}) < n:
+            raise ValueError("Два варианта совпадают: у каждого должна быть своя формулировка")
+        if any(len(o) > 200 for o in self.options):
+            raise ValueError("Вариант длиннее 200 знаков: сформулируйте короче")
+        for name, ru in (("user_start", "Ваш старт"), ("zone_min", "Начало зоны"), ("zone_max", "Конец зоны"), ("opponent_start", "Старт собеседника")):
+            v = getattr(self, name)
+            if v != int(v) or not 0 <= v < n:
+                raise ValueError(f"{ru}: нужен один из вариантов, от 1 до {n}")
+        if self.user_start > self.opponent_start:
+            raise ValueError("Варианты идут от лучшего для вас к худшему: ваш старт должен стоять в списке выше старта собеседника")
+
+    @property
+    def ordinal(self) -> bool:
+        return bool(self.options)
+
     @property
     def subject(self) -> str:
-        """Что означает число: часть единицы до последней запятой («стоимость доработки»), пусто, если не указано."""
+        """Предмет торга: часть единицы до последней запятой («стоимость доработки»), пусто, если не указано; у шкалы вариантов — весь unit."""
+        if self.ordinal:
+            return self.unit.strip()
         return self.unit.rsplit(",", 1)[0].strip() if "," in self.unit else ""
 
     @property
     def short_unit(self) -> str:
-        """Единица без предмета: «тыс. руб.», «рабочих дней», «%»."""
+        """Единица без предмета: «тыс. руб.», «рабочих дней», «%»; у шкалы вариантов единицы нет."""
+        if self.ordinal:
+            return ""
         return self.unit.rsplit(",", 1)[1].strip() or self.unit if "," in self.unit else self.unit
 
+    def index(self, value: float) -> int:
+        """Номер варианта (с нуля) для позиции на шкале вариантов."""
+        return max(0, min(len(self.options) - 1, int(round(value))))
+
+    def option(self, value: float) -> str:
+        return self.options[self.index(value)]
+
     def fmt(self, value: float) -> str:
+        if self.ordinal:
+            return f"«{self.option(value)}»"
         return f"{value:g}%" if self.short_unit == "%" else f"{value:g} {self.short_unit}"
+
+    def fmt_at(self, value: float) -> str:
+        """«на 10%» или «на варианте «…»»: для фраз вида «собеседник стоял …»."""
+        return f"на варианте {self.fmt(value)}" if self.ordinal else f"на {self.fmt(value)}"
+
+    def numbered(self) -> str:
+        """Варианты списком с номерами от 1: для промптов модели."""
+        return "; ".join(f"{i}) {o}" for i, o in enumerate(self.options, 1))
+
+    def describe(self) -> str:
+        """Старт игрока и целевая зона словами: для судьи и разметки."""
+        if not self.ordinal:
+            return f"старт пользователя {self.user_start:g}, целевая зона {self.zone_min:g}–{self.zone_max:g}"
+        zone = (f"вариант {self.index(self.zone_min) + 1}" if self.zone_min == self.zone_max
+                else f"варианты {self.index(self.zone_min) + 1}–{self.index(self.zone_max) + 1}")
+        return (f"варианты от лучшего для пользователя к худшему: {self.numbered()}; старт пользователя — вариант {self.index(self.user_start) + 1}, "
+                f"целевая зона — {zone}, старт собеседника — вариант {self.index(self.opponent_start) + 1}")
 
 
 MOVE_LABELS = set(get_args(MoveLabel))
@@ -160,7 +224,8 @@ class ScenarioBrief(BaseModel):
 class MoveAnalysis(BaseModel):
     labels: list[MoveLabel]
     mentioned_details: list[str] = Field(default_factory=list, description="какие обязательные детали из карточки пользователь озвучил в этой реплике")
-    proposed_value: float | None = Field(default=None, description="значение, которое пользователь предложил в единицах торга, если назвал")
+    proposed_value: float | None = Field(default=None, description="значение, которое пользователь предложил в единицах торга, если назвал; "
+                                          "при шкале вариантов — номер варианта")
 
 
 class OpponentState(BaseModel):

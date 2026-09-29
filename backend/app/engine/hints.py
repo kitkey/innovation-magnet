@@ -59,6 +59,12 @@ STANDARD_HINTS = {
 }
 
 
+ORDINAL_HINTS = {
+    "Слишком общо. Назовите цифру, срок или условие.": "Слишком общо. Назовите, какой вариант условия вам подходит.",
+    "Конкретного предложения пока не было. Назовите своё число.": "Конкретного предложения пока не было. Назовите вариант, на который вы готовы.",
+}
+
+
 def irritation_high(card: ScenarioCard) -> int:
     """Раздражение, при котором до срыва остаётся два шага."""
     return rules.DIFFICULTY[card.difficulty]["breakdown_irritation"] - 2
@@ -95,7 +101,10 @@ def holds(card: ScenarioCard, when: str, move: MoveAnalysis, seen: set[str], sta
 def catalog(card: ScenarioCard, from_org: bool) -> list[tuple[str, Hint, str]]:
     """Подсказки сессии с устойчивыми id: сначала свои из карточки, потом стандартные по методу."""
     own = "org" if from_org else "author"
-    return [(f"c{i}", h, own) for i, h in enumerate(card.hints)] + [(f"s{i}", h, "standard") for i, h in enumerate(STANDARD_HINTS[card.method])]
+    standard = STANDARD_HINTS[card.method]
+    if card.target_zone.ordinal:  # торг о выборе варианта: «своё число» звучит странно
+        standard = [h.model_copy(update={"text": ORDINAL_HINTS.get(h.text, h.text)}) for h in standard]
+    return [(f"c{i}", h, own) for i, h in enumerate(card.hints)] + [(f"s{i}", h, "standard") for i, h in enumerate(standard)]
 
 
 def fire(card: ScenarioCard, from_org: bool, move: MoveAnalysis, seen: set[str], state: OpponentState, turn: int,

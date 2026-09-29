@@ -57,6 +57,8 @@ def _template_opening(card: ScenarioCard) -> str:
     topic = card.topic.strip().rstrip(".")
     lead = f"Давайте обсудим: {topic[:1].lower()}{topic[1:]}." if topic else "Давайте к делу."
     pos = z.fmt(z.opponent_start).rstrip(".")
+    if z.ordinal:
+        return f"{lead} {z.subject[:1].upper()}{z.subject[1:]}: я за вариант {pos}. Что скажете?"
     what = f"{z.subject[:1].upper()}{z.subject[1:]} — я исхожу из {pos}." if z.subject else f"Я исхожу из {pos}."
     return f"{lead} {what} Что скажете?"
 
@@ -248,11 +250,12 @@ def sanitize_judge(card: ScenarioCard, report: JudgeReport, user_texts: list[str
 
 def walk_away_verdict(card: ScenarioCard, position: float) -> tuple[bool, str]:
     """Верно ли пользователь вышел к альтернативе: позиция собеседника на момент выхода против худшего края целевой зоны."""
-    fmt, edge = card.target_zone.fmt, rules.zone_boundary(card)
+    z, edge = card.target_zone, rules.zone_boundary(card)
+    fmt = z.fmt
     if rules.walk_away_justified(card, position):
-        return True, (f"Верное решение: собеседник стоял на {fmt(position)}, это хуже границы целевой зоны ({fmt(edge)}), "
+        return True, (f"Верное решение: собеседник стоял {z.fmt_at(position)}, это хуже границы целевой зоны ({fmt(edge)}), "
                       f"выгодной сделки не было и альтернатива лучше: {card.user_batna}.")
-    return False, (f"Выход преждевременный: собеседник уже стоял на {fmt(position)}, это не хуже границы целевой зоны "
+    return False, (f"Выход преждевременный: собеседник уже стоял {z.fmt_at(position)}, это не хуже границы целевой зоны "
                    f"({fmt(edge)}), сделка была не хуже вашей альтернативы.")
 
 

@@ -1,4 +1,4 @@
-export type TargetZone = { unit: string; user_start: number; zone_min: number; zone_max: number; opponent_start: number };
+export type TargetZone = { unit: string; user_start: number; zone_min: number; zone_max: number; opponent_start: number; options?: string[] };
 
 /** «стоимость доработки, тыс. руб.» → предмет торга и короткая единица, как TargetZone.subject/short_unit на сервере. */
 export function unitParts(unit: string): { subject: string; short: string } {
@@ -6,9 +6,30 @@ export function unitParts(unit: string): { subject: string; short: string } {
   return i < 0 ? { subject: "", short: unit } : { subject: unit.slice(0, i).trim(), short: unit.slice(i + 1).trim() || unit };
 }
 
-export function fmtValue(v: number, unit: string): string {
-  const { short } = unitParts(unit);
+/** Целевая зона шкалой вариантов: позиции — номера вариантов с нуля, 0 — лучший для игрока. */
+export function isOrdinal(z: TargetZone): boolean {
+  return !!z.options && z.options.length > 0;
+}
+
+export function optIndex(z: TargetZone, v: number): number {
+  return Math.max(0, Math.min((z.options?.length ?? 1) - 1, Math.round(v)));
+}
+
+/** Предмет торга: для шкалы вариантов — весь unit, иначе часть до запятой. */
+export function zoneSubject(z: TargetZone): string {
+  return isOrdinal(z) ? z.unit.trim() : unitParts(z.unit).subject;
+}
+
+/** Позиция для людей: число с единицей или текст варианта. Строкой передаётся единица числовой зоны. */
+export function fmtValue(v: number, z: TargetZone | string): string {
+  if (typeof z !== "string" && isOrdinal(z)) return z.options![optIndex(z, v)];
+  const { short } = unitParts(typeof z === "string" ? z : z.unit);
   return short === "%" ? `${v}%` : `${v} ${short}`;
+}
+
+/** Короткая запись позиции для тесных мест: номер варианта или число с единицей. */
+export function fmtShort(v: number, z: TargetZone): string {
+  return isOrdinal(z) ? `№${optIndex(z, v) + 1}` : fmtValue(v, z);
 }
 
 export type ScenarioCard = {
