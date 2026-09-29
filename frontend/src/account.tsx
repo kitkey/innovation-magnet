@@ -173,7 +173,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
         <div className="facts">
           <div className="fact"><span className="num">{data.members.length}</span><span className="caps">{plural(data.members.length, ["участник", "участника", "участников"])}</span></div>
           <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.sessions, 0)}</span><span className="caps">сессий за период</span></div>
-          <div className="fact"><span className="num">{data.members.reduce((a, m) => a + m.training_minutes, 0)}</span><span className="caps">минут тренировок</span></div>
+          <div className="fact"><span className="num">{Math.round(data.members.reduce((a, m) => a + m.training_minutes, 0))}</span><span className="caps">минут тренировок</span></div>
         </div>
       </Scene>
       <div className="body grid2 org">
@@ -190,7 +190,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
           {best.length > 0 && (
             <section className="card">
               <h3>Лучшие за период</h3>
-              <ul className="plain bests">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}</span><b>{n}</b><span className="num">{Math.round(v)}</span></li>)}</ul>
+              <ul className="plain bests">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}</span><b>{n}</b><span className="num">{num(v)}</span></li>)}</ul>
             </section>
           )}
           <SeasonPanel onChanged={load} />
@@ -216,7 +216,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
               </div>
               <div className="mstats">
                 <span><b className="num">{m.sessions}</b>{plural(m.sessions, ["сессия", "сессии", "сессий"])}<i><i style={{ width: `${(m.sessions / max) * 100}%` }} /></i></span>
-                <span><b className="num">{m.training_minutes}</b>минут</span>
+                <span><b className="num">{Math.round(m.training_minutes)}</b>минут</span>
                 <span><b className="num">{pct(m.in_zone_share)}</b>в целевой зоне</span>
               </div>
               {Object.keys(m.axes).length > 0 && (
@@ -301,7 +301,7 @@ export function Leaderboard({ user }: { user: User | null }) {
         )}
         <div className="rules">
           <Icon name="book" size={18} />
-          <p className="small">Очко сессии: средняя оценка судьи по осям × сложность (лёгкая 0,8, средняя 1,0, сложная 1,25) + 10 за соглашение в целевой зоне.
+          <p className="small">Очко сессии: средняя оценка судьи по осям × сложность (лёгкая 0,8, средняя 1,0, сложная 1,25) + 10 за соглашение в целевой зоне или верный выход к альтернативе.
             Рейтинг: среднее по {board?.top_n ?? 5} лучшим сессиям за период{scope === "org" ? " внутри сезона" : ""}.
             {scope === "org" && board?.medal_rule && board.medal_rule.slots > 0 && " Метка у места показывает, какую медаль участник получит, если сезон закроют сейчас."} Цифры у имени — медали за прошлые сезоны.</p>
         </div>

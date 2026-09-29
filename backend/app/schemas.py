@@ -116,7 +116,8 @@ class TargetZone(BaseModel):
     def fmt(self, value: float) -> str:
         if self.ordinal:
             return f"«{self.option(value)}»"
-        return f"{value:g}%" if self.short_unit == "%" else f"{value:g} {self.short_unit}"
+        n = f"{value:g}".replace(".", ",")
+        return f"{n}%" if self.short_unit == "%" else f"{n} {self.short_unit}"
 
     def fmt_at(self, value: float) -> str:
         """«на 10%» или «на варианте «…»»: для фраз вида «собеседник стоял …»."""

@@ -24,7 +24,8 @@ export function zoneSubject(z: TargetZone): string {
 export function fmtValue(v: number, z: TargetZone | string): string {
   if (typeof z !== "string" && isOrdinal(z)) return z.options![optIndex(z, v)];
   const { short } = unitParts(typeof z === "string" ? z : z.unit);
-  return short === "%" ? `${v}%` : `${v} ${short}`;
+  const n = String(+v.toFixed(2)).replace(".", ",");
+  return short === "%" ? `${n}%` : `${n} ${short}`;
 }
 
 /** Короткая запись позиции для тесных мест: номер варианта или число с единицей. */
@@ -171,7 +172,7 @@ async function call<T>(path: string, init?: RequestInit, json = true): Promise<T
   const r = await fetch(path, { ...init, headers });
   if (!r.ok) {
     const detail = (await r.json().catch(() => ({}))).detail;
-    throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail ?? r.statusText);
+    throw new Error(Array.isArray(detail) ? detail.map((d) => String(d.msg).replace(/^Value error,\s*/i, "")).join("; ") : detail ?? r.statusText);
   }
   return r.json();
 }

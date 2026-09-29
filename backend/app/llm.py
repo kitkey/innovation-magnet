@@ -1,5 +1,6 @@
 """Вызовы LLM через LiteLLM (любой провайдер) и Instructor (ответы строго по Pydantic-схемам)."""
 import logging
+import re
 import threading
 
 import instructor
@@ -57,7 +58,12 @@ def strip_speaker(card: ScenarioCard, text: str) -> str:
         if text.lower().startswith(n.lower()):
             rest = text[len(n):].lstrip()
             if rest[:1] in (":", "—", "-"):
-                return rest[1:].lstrip()
+                text = rest[1:].lstrip()
+                break
+    full = card.opponent_name.strip()
+    if " " in full:
+        # и подпись в конце фразы: «Цена уже озвучена, Ольга Кравец.» или «… — Ольга Кравец»
+        text = re.sub(rf"\s*[,—–-]\s*{re.escape(full)}\s*(?=[.!?…]|$)", "", text)
     return text
 
 
@@ -86,6 +92,12 @@ def label_model() -> str:
     """Модель разметки ходов: LLM_LABEL_MODEL, если задана, иначе основная. От разметки зависит исход сессии,
     поэтому при YandexGPT Lite она идёт в YandexGPT Pro: на 27 эталонных репликах Lite ошибался в 2, Pro — ни в одной."""
     return settings.llm_label_model or _pro(settings.llm_model)
+
+
+def opponent_model() -> str:
+    """Реплики собеседника: LLM_OPPONENT_MODEL, иначе основная, а при YandexGPT Lite — YandexGPT Pro:
+    Lite держится за свои прошлые числа и противоречит позиции, которую считают правила."""
+    return settings.llm_opponent_model or _pro(settings.llm_model)
 
 
 def judge_model() -> str:
@@ -150,7 +162,9 @@ def analyze_move(card: ScenarioCard, history: list[dict], message: str) -> MoveA
 def _position_line(card: ScenarioCard, state: OpponentState) -> str:
     z = card.target_zone
     if not z.ordinal:
-        return f"Текущая позиция, которую ты готов принять: {z.fmt(state.position)} (предмет торга: {z.unit}). "
+        return (f"Текущая позиция, которую ты готов принять: {z.fmt(state.position)} (предмет торга: {z.unit}). "
+                "Если называешь своё число, называй только эту позицию: числа из твоих прошлых реплик устарели. "
+                "Не говори, что это последнее или окончательное предложение, и не начинай ответ фразой из своих прошлых реплик. ")
     return (f"Торг идёт о выборе варианта, предмет: {z.unit}. Варианты от самого выгодного для пользователя к самому выгодному для тебя: "
             f"{z.numbered()}. Сейчас ты готов принять вариант {z.index(state.position) + 1}: {z.fmt(state.position)} "
             "или любой вариант с большим номером; варианты с меньшим номером не принимай. Называй варианты словами, без номеров. ")
@@ -178,7 +192,7 @@ def opponent_reply(card: ScenarioCard, state: OpponentState, move: MoveAnalysis,
     )
     resp = litellm.completion(
         messages=[{"role": "system", "content": system}, *history[-10:], {"role": "user", "content": _wrap(message)}],
-        **_kwargs(),
+        **_kwargs(opponent_model()),
     )
     return strip_speaker(card, resp.choices[0].message.content.strip())
 
@@ -199,7 +213,7 @@ def opening_line(card: ScenarioCard) -> str:
         + _name(card)
         + _gender(card)
     )
-    resp = litellm.completion(messages=[{"role": "system", "content": system}, {"role": "user", "content": "Начинай разговор."}], **_kwargs())
+    resp = litellm.completion(messages=[{"role": "system", "content": system}, {"role": "user", "content": "Начинай разговор."}], **_kwargs(opponent_model()))
     return strip_speaker(card, resp.choices[0].message.content.strip()).strip("«»\"")
 
 
@@ -219,6 +233,12 @@ def judge(card: ScenarioCard, turns: list[dict], outcome_note: str = "") -> Judg
         "Ты судья учебных переговоров. Оцени только реплики пользователя по осям от 0 до 100, ровно эти оси и с такими названиями: "
         f"{axes}. Выбери 1–3 ключевых момента: дословная цитата реплики пользователя, что было не так в этой конкретной реплике "
         "и как сказать лучше — перефразируй именно её, с учётом того, что ответил собеседник. "
+        "«Как лучше» — готовая реплика от первого лица, которую можно произнести вслух в этом разговоре, с конкретными числами и условиями "
+        "из сценария, а не совет о том, что подчеркнуть; без слов «компромиссный», «взаимовыгодный», «подчеркните». "
+        "«Как лучше» по сути отличается от цитаты: добавь то, чего не хватило (условие, встречное требование, число, вопрос), "
+        "не повторяй реплику пользователя и не бери другую его реплику. Для моментов выбирай ходы с давлением, уступкой без условия "
+        "или без приёмов; если слабых ходов нет, возьми один ход, где можно было добиться большего. "
+        "В полях «что не так» и «как лучше» обращайся к игроку на «вы», не называй его «пользователь». В «как лучше» не предлагай условия хуже уже достигнутого. "
         "Не советуй приём, который пользователь уже применял: если он задавал вопросы о ситуации, не пиши «задавайте ситуационные вопросы», "
         "а скажи, чего не хватило в его вопросе или какой следующий шаг он пропустил. Общие советы без привязки к репликам не пиши. "
         "Не советуй соглашаться на условия хуже границы целевой зоны пользователя. "

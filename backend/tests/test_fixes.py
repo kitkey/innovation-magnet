@@ -84,7 +84,7 @@ def test_offline_judge_axes_and_moments():
 def test_judge_sanitized():
     fallback = offline.judge_offline(DEADLINE, [("Что для вас важно?", MoveAnalysis(labels=["interest_question"]))])
     raw = JudgeReport(axes={"выдуманная ось": 999, "интересы, а не позиции": 150},
-                      key_moments=[KeyMoment(quote="я этого не говорил", problem="-", better="-"), KeyMoment(quote="что для вас важно", problem="p", better="b")],
+                      key_moments=[KeyMoment(quote="я этого не говорил", problem="-", better="-"), KeyMoment(quote="что для вас важно", problem="p", better="Что для вас важнее к пятнице: полный отчёт или черновик с ключевыми цифрами?")],
                       next_scenario_hint="h")
     clean = service.sanitize_judge(DEADLINE, raw, ["Что для вас важно?"], fallback)
     assert list(clean.axes) == rules.METHOD_AXES["harvard"]

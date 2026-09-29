@@ -33,3 +33,9 @@ def test_label_and_judge_explicit(monkeypatch):
     monkeypatch.setattr(settings, "llm_judge_model", "m-judge")
     assert llm.label_model() == "m-label"
     assert llm.judge_model() == "m-judge"
+
+
+def test_opponent_uses_pro_when_main_is_lite(monkeypatch):
+    monkeypatch.setattr(settings, "llm_opponent_model", "")
+    monkeypatch.setattr(settings, "llm_model", "openai/gpt://b1g/yandexgpt-lite/latest")
+    assert llm.opponent_model() == "openai/gpt://b1g/yandexgpt/latest"
