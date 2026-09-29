@@ -6,6 +6,23 @@
 
 Как запустить и показать продукт без пояснений команды: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
+Демо: https://89-169-4-44.sslip.io (YandexGPT и Yandex SpeechKit, вход не нужен).
+
+## Быстрый старт
+
+1. Скопируйте шаблон настроек: `cp env.example .env`.
+2. Впишите в `.env` ключи. Для YandexGPT и голоса хватает одного ключа сервисного аккаунта Yandex Cloud с ролями `ai.languageModels.user`, `ai.speechkit-stt.user`, `ai.speechkit-tts.user`:
+   ```
+   LLM_MODEL=openai/gpt://<folder_id>/yandexgpt-lite/latest
+   LLM_API_BASE=https://llm.api.cloud.yandex.net/v1
+   LLM_FALLBACKS=
+   YANDEX_API_KEY=<ключ сервисного аккаунта>
+   ```
+   Без ключей можно запустить на правилах: `OFFLINE_MODE=true`.
+3. Запустите одной командой: `docker compose up --build` и откройте http://localhost:8000.
+
+Запуск без Docker и остальные варианты описаны ниже в разделе «Запуск».
+
 ## Как устроено
 
 - Перед диалогом пользователь видит бриф: ситуацию, свою роль, цель, альтернативу и предмет торга. Собеседник открывает разговор первой репликой из карточки сценария; если её нет, реплику пишет LLM, без LLM — шаблон со стартовой позицией собеседника.
