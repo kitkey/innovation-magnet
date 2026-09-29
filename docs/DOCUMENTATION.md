@@ -2,7 +2,7 @@
 
 ЛЦТ-2026, задача №9 "Арена переговоров" (ОЭЗ "Алабуга"), команда "Магнит инноваций".
 
-Репозиторий: https://github.com/kitkey/innovation-magnet, ветка `main`. Развёрнутый прототип: https://89-169-4-44.sslip.io (YandexGPT и Yandex SpeechKit). Подробное ТЗ лежит в [docs/TZ.md](TZ.md), краткое описание и детали голоса и аватара в [README.md](../README.md).
+Репозиторий: https://github.com/kitkey/innovation-magnet, ветка `main`. Полная копия в SourceCraft: https://sourcecraft.dev/lct-hackaton-2026/case-19-negotiation-simulator-team-69. Развёрнутый прототип: https://89-169-4-44.sslip.io (YandexGPT и Yandex SpeechKit). Подробное ТЗ лежит в [docs/TZ.md](TZ.md), краткое описание и детали голоса и аватара в [README.md](../README.md).
 
 ## 1. Целевая аудитория, проблема и границы MVP
 

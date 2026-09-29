@@ -8,6 +8,8 @@
 
 Демо: https://89-169-4-44.sslip.io (YandexGPT и Yandex SpeechKit, вход не нужен).
 
+Полная копия репозитория в SourceCraft: https://sourcecraft.dev/lct-hackaton-2026/case-19-negotiation-simulator-team-69
+
 ## Быстрый старт
 
 1. Скопируйте шаблон настроек: `cp env.example .env`.
