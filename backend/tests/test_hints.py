@@ -83,9 +83,10 @@ def test_fire_once_and_at_most_two_per_turn():
     assert hints.fire(card, True, move("pressure"), {"pressure"}, OpponentState(), 3, fired) == []
 
 
-def test_seeds_have_female_names():
+def test_seeds_have_names_matching_voice():
     for card in SEEDS.values():
-        assert card.opponent_name and len(card.opponent_name.split()) == 2 and card.voice == "female"
+        first = card.opponent_name.split()[0]
+        assert card.opponent_name and len(card.opponent_name.split()) == 2 and card.voice == ("female" if first[-1] in "ая" else "male")
         assert card.opponent_name.split()[1] not in card.opponent_role
 
 
@@ -143,7 +144,7 @@ def test_generated_card_drops_hints():
     data = custom_card()
     data |= {"title": data["name"], "target_zone": data["target_zone"] | {"player_wants": "less"}}
     card = to_card(GeneratedCard(**data))
-    assert card.hints == [] and card.coach_tips == [] and card.avatar_url is None
+    assert card.hints == [] and card.coach_tips == [] and card.avatar_url and "chibi" in card.avatar_url
     assert card.opponent_name == SUPPLIER.opponent_name
 
 

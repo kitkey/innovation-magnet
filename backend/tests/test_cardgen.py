@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app import characters
 from app import cardgen, llm
 from app.cardgen import CardGenError, GeneratedCard, explain, fix_opening, system_prompt, to_card
 from app.config import settings
@@ -35,7 +36,7 @@ def zone_error(**z) -> str:
 def test_valid_card_converts():
     card = to_card(GeneratedCard(**raw()))
     assert card.name == "Цена сайта со студией" and card.target_zone.opponent_start == 180
-    assert card.opening.startswith("Смета") and card.coach_tips == [] and card.hints == [] and card.avatar_url is None
+    assert card.opening.startswith("Смета") and card.coach_tips == [] and card.hints == [] and card.avatar_url == characters.pick(card.voice, card.opponent_name)
 
 
 def test_reversed_zone_is_swapped():

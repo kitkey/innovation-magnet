@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from . import llm, scoring, service, voice
 from .accounts import WRITE_LOCK, current_user, router as accounts_router
 from .cardgen import CardGenError
+from .characters import CHARACTERS, Character
 from .config import settings
 from .db import ScenarioRow, SessionLocal, SessionRow, UserRow, get_db, init_db
 from .engine import rules
@@ -217,6 +218,12 @@ def tts(payload: TtsIn):
         return voice.synthesize(payload.text, payload.emotion, payload.voice)
     except voice.VoiceError as exc:
         raise HTTPException(exc.status, exc.message) from exc
+
+
+@app.get("/api/avatars/characters", response_model=list[Character])
+def list_characters():
+    """Встроенные персонажи для выбора в форме сценария; ready=false — ещё не готовы, показываются неактивными."""
+    return CHARACTERS
 
 
 @app.post("/api/avatars")

@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from . import characters
 from .schemas import DOMAIN_ICONS, ScenarioCard, TargetZone
 
 
@@ -352,7 +353,7 @@ def to_card(g: GeneratedCard) -> ScenarioCard:
         opponent_goal=g.opponent_goal.strip(), opponent_hidden_interests=g.opponent_hidden_interests[:5],
         opponent_batna=g.opponent_batna.strip(), user_batna=g.user_batna.strip(), target_zone=g.target_zone.to_zone(),
         mandatory_details=g.mandatory_details[:5], context=g.context.strip(), opening=fix_opening(g.opening, g)[:1500],
-        max_turns=g.max_turns, voice=g.voice,
+        max_turns=g.max_turns, voice=g.voice, avatar_url=characters.pick(g.voice, name),
     )
 
 

@@ -729,3 +729,16 @@ button.mbtn:hover:not(:disabled) { background: var(--accent-soft); }
   .mg-foot { padding: 10px 16px 16px; }
   .mg-foot button { flex: 1; }
 }
+
+/* Галерея персонажей в форме сценария */
+.char-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 132px)); gap: 10px; }
+.char { position: relative; display: grid; justify-items: center; gap: 2px; padding: 8px 6px 10px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; text-align: center; }
+.char img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--room-1); }
+.char:hover:not(:disabled) { border-color: var(--accent); }
+.char.on { border-color: var(--accent); box-shadow: var(--focus); }
+.char:disabled { cursor: default; }
+.char:disabled img, .char:disabled .char-name { opacity: .45; }
+.char-name { font-weight: 600; font-size: 14px; margin-top: 4px; }
+.char-meta { font-size: 12px; color: var(--muted); }
+.char-soon { position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+@media (max-width: 520px) { .char-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; } .char img { width: 64px; height: 64px; } .char { padding: 6px 2px 8px; } .char-meta { font-size: 11px; } }

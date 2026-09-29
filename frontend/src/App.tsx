@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Auth, Leaderboard, OrgCabinet, Profile } from "./account";
 import { ART, autoIcon, Empty, GROUP_ICONS, iconSrc, Scene } from "./art";
-import { api, AUTH_KEY, Hint, HistoryItem, Scenario, ScenarioCard, store, User } from "./api";
+import { api, AUTH_KEY, Character, Hint, HistoryItem, Scenario, ScenarioCard, store, User } from "./api";
 import Dialog from "./Dialog";
 import Home, { SessionRow } from "./Home";
 import { Icon } from "./icons";
@@ -65,10 +65,12 @@ export default function App() {
   );
 }
 
-function AvatarField({ value, onChange }: { value: string | null; onChange: (url: string | null) => void }) {
+function AvatarField({ value, onChange }: { value: string | null; onChange: (url: string | null, voice?: Character["voice"]) => void }) {
   const [info, setInfo] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [chars, setChars] = useState<Character[]>([]);
+  useEffect(() => { api.characters().then(setChars).catch(() => setChars([])); }, []);
   const upload = async (f: File | undefined) => {
     if (!f) return;
     setErr(""); setInfo(""); setBusy(true);
@@ -78,12 +80,27 @@ function AvatarField({ value, onChange }: { value: string | null; onChange: (url
       setInfo(`Загружено: ${(r.size / 1048576).toFixed(1)} МБ, визем ${r.visemes}. ${r.warnings.join(". ")}`);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
+  const picked = chars.find((c) => c.url === value);
+  const own = value && !picked;
   return (
-    <fieldset><legend>3D-аватар собеседника</legend>
-      <p className="small muted">{value ? `Свой аватар: ${value}` : "Стандартный аватар (MPFB, CC0)."} GLB со скелетом в стиле Mixamo, виземами Oculus и ARKit-блендшейпами: Avaturn, VRoid через Blender, MPFB. Как сделать — в README.</p>
+    <fieldset><legend>Персонаж собеседника</legend>
+      <p className="small muted">Кого вы увидите в режиме «3D и голос». Голос подставится по полу персонажа, его можно сменить выше.</p>
+      <div className="char-grid" role="radiogroup" aria-label="Персонаж собеседника">
+        {chars.map((c) => (
+          <button type="button" key={c.id} role="radio" aria-checked={c.url === value} disabled={!c.ready}
+            className={`char ${c.url === value ? "on" : ""}`} onClick={() => onChange(c.url, c.voice)}
+            title={c.ready ? `${c.name}, ${c.style === "chibi" ? "чиби" : "Pixar"}` : "Скоро"}>
+            <img src={c.portrait} alt="" loading="lazy" width={96} height={96} />
+            <span className="char-name">{c.name}</span>
+            <span className="char-meta">{c.style === "chibi" ? "чиби" : "Pixar"} · {c.voice === "female" ? "жен." : "муж."}</span>
+            {!c.ready && <span className="char-soon">скоро</span>}
+          </button>
+        ))}
+      </div>
+      <p className="small muted">{own ? `Свой аватар: ${value}` : picked ? `Выбран: ${picked.name}, ${picked.style === "chibi" ? "чиби" : "Pixar"}.` : "Не выбран: подберём чиби по голосу."} Свой GLB — со скелетом в стиле Mixamo, виземами Oculus и ARKit-блендшейпами; как сделать — в README.</p>
       <div className="row">
-        <label className="file">{busy ? "Загружаем…" : "Загрузить GLB"}<input type="file" accept=".glb,model/gltf-binary" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} /></label>
-        {value && <button onClick={() => onChange(null)}>Вернуть стандартный</button>}
+        <label className="file">{busy ? "Загружаем…" : "Загрузить свой GLB"}<input type="file" accept=".glb,model/gltf-binary" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} /></label>
+        {value && <button type="button" onClick={() => onChange(null)}>Сбросить выбор</button>}
       </div>
       {info && <p className="small">{info}</p>}
       {err && <p className="error">{err}</p>}
@@ -235,7 +252,7 @@ function Setup({ scenario, copy, go }: { scenario?: Scenario; copy?: boolean; go
       <label>{lbl("opening", "Первая реплика собеседника")}<textarea value={card.opening ?? ""} placeholder="Если пусто, собеседник начнёт сам: с сути вопроса и своей стартовой позиции"
         onChange={(e) => set("opening", e.target.value)} /></label>
       {select("voice", "Голос собеседника в режиме «3D и голос»", [["female", "Женский"], ["male", "Мужской"]])}
-      <AvatarField value={card.avatar_url} onChange={(v) => set("avatar_url", v)} />
+      <AvatarField value={card.avatar_url} onChange={(v, voice) => setCard({ ...card, avatar_url: v, ...(voice ? { voice } : {}) })} />
       <label>Наставления перед стартом (по строке)<textarea value={(card.coach_tips ?? []).join("\n")} placeholder="Маскот покажет их до первого хода, перед стандартными советами по методу"
         onChange={(e) => set("coach_tips", e.target.value.split("\n"))} /></label>
       <HintsField value={card.hints ?? []} maxTurns={card.max_turns} onChange={(v) => set("hints", v)} />

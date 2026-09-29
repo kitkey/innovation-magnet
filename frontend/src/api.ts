@@ -74,6 +74,7 @@ export type TurnOut = {
   hints?: HintOut[];
 };
 
+export type Character = { id: string; name: string; style: "chibi" | "pixar"; voice: "female" | "male"; url: string; portrait: string; ready: boolean };
 export type Mood = "neutral" | "happy" | "angry" | "sad" | "disgust" | "skeptic";
 export type VoiceTurnOut = TurnOut & { recognized: string; audio_url: string | null };
 export type VoiceStatus = { stt: boolean; tts: boolean; provider: string | null; ffmpeg: boolean; max_seconds: number; avatar_max_mb: number };
@@ -200,6 +201,7 @@ export const api = {
   voiceTurn: (sid: string, audio: Blob, name: string) => { const f = new FormData(); f.append("audio", audio, name); return call<VoiceTurnOut>(`/api/sessions/${sid}/voice`, { method: "POST", body: f }, false); },
   voiceStatus: () => call<VoiceStatus>("/api/voice/status"),
   tts: (text: string, emotion: Mood, voice: ScenarioCard["voice"]) => call<Speech>("/api/tts", { method: "POST", body: JSON.stringify({ text, emotion, voice }) }),
+  characters: () => call<Character[]>("/api/avatars/characters"),
   uploadAvatar: (file: File) => { const f = new FormData(); f.append("file", file, file.name); return call<AvatarUpload>("/api/avatars", { method: "POST", body: f }, false); },
   leaderboard: (scope: "org" | "global", period: Period) => call<Board>(`/api/leaderboard?scope=${scope}&period=${period}`),
 };
