@@ -35,9 +35,11 @@ def _kwargs(model: str | None = None) -> dict:
 def cardgen_model() -> str:
     """Карточка генерируется разово, и слабая модель оставляет пустыми интересы, имя и альтернативу собеседника.
     Поэтому для неё отдельная модель: LLM_CARDGEN_MODEL, а если не задана и основная — YandexGPT Lite, то YandexGPT Pro."""
-    if settings.llm_cardgen_model:
-        return settings.llm_cardgen_model
-    return settings.llm_model.replace("yandexgpt-lite/", "yandexgpt/")
+    return settings.llm_cardgen_model or _pro(settings.llm_model)
+
+
+def _pro(model: str) -> str:
+    return model.replace("yandexgpt-lite/", "yandexgpt/")
 
 
 def _gender(card: ScenarioCard) -> str:
@@ -82,8 +84,13 @@ def option_number_to_index(card: ScenarioCard, move: MoveAnalysis) -> MoveAnalys
 
 def label_model() -> str:
     """Модель разметки ходов: LLM_LABEL_MODEL, если задана, иначе основная. От разметки зависит исход сессии,
-    поэтому её можно отдать модели сильнее той, что отвечает за собеседника."""
-    return settings.llm_label_model or settings.llm_model
+    поэтому при YandexGPT Lite она идёт в YandexGPT Pro: на 27 эталонных репликах Lite ошибался в 2, Pro — ни в одной."""
+    return settings.llm_label_model or _pro(settings.llm_model)
+
+
+def judge_model() -> str:
+    """Судья вызывается один раз за сессию; LLM_JUDGE_MODEL, иначе как у разметки."""
+    return settings.llm_judge_model or _pro(settings.llm_model)
 
 
 LABEL_GUIDE = (
@@ -231,7 +238,7 @@ def judge(card: ScenarioCard, turns: list[dict], outcome_note: str = "") -> Judg
         response_model=JudgeReport,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": f"<transcript>\n{lines}\n</transcript>"}],
         max_retries=2,
-        **_kwargs(),
+        **_kwargs(judge_model()),
     )
 
 

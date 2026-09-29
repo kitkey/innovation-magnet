@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     llm_model: str = "openrouter/qwen/qwen3.8-27b:free"
     llm_cardgen_model: str = ""
     llm_label_model: str = ""
+    llm_judge_model: str = ""
     llm_fallbacks: str = "openrouter/nvidia/nemotron-3-super-120b-a12b:free,openrouter/google/gemma-4-31b-it:free"
     llm_api_key: str = ""
     llm_api_base: str | None = None

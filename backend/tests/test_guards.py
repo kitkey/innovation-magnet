@@ -209,6 +209,7 @@ def test_judge_gets_used_techniques():
 
 def test_label_model_setting(monkeypatch):
     monkeypatch.setattr(settings, "llm_label_model", "")
+    monkeypatch.setattr(settings, "llm_model", "openrouter/qwen/qwen3.8-27b:free")
     assert llm.label_model() == settings.llm_model
     monkeypatch.setattr(settings, "llm_label_model", "openai/gpt://x/yandexgpt/latest")
     assert llm.label_model() == "openai/gpt://x/yandexgpt/latest"
