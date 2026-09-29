@@ -101,7 +101,12 @@ def _guard_reply(card: ScenarioCard, state: OpponentState, reply: str, message: 
     Число из реплики пользователя собеседник может повторить, чтобы отказаться от него, если тут же называет свою позицию."""
     found = offline.values(card, reply)
     echoed = set(offline.values(card, message)) if any(abs(v - state.position) < 1e-9 for v in found) else set()
-    return not any(rules.better_for_user(card, v, state.position) and v not in echoed for v in found)
+    if any(rules.better_for_user(card, v, state.position) and v not in echoed for v in found):
+        return False
+    # старая позиция вместо текущей: правила уже сдвинули собеседника, а модель держится за прошлое число
+    if found and not any(abs(v - state.position) < 1e-9 for v in found) and not set(found) <= echoed | set(offline.values(card, message)):
+        return False
+    return not guards.claims_finality(reply)
 
 
 def analyze(card: ScenarioCard, history: list[dict], message: str, position: float | None = None) -> MoveAnalysis:
@@ -144,13 +149,17 @@ def turn(db, row: SessionRow, message: str, audio_url: str | None = None) -> Tur
         reply = "Время вышло, к соглашению мы не пришли."
     elif _use_llm():
         try:
-            reply = guards.strip_player_voice(llm.opponent_reply(card, state, move, conceded, history, message),
-                                              [message, *[t.text for t in row.turns if t.role == "user"][-3:]])
+            players = [message, *[t.text for t in row.turns if t.role == "user"][-3:]]
+            mine = [t.text for t in row.turns if t.role == "opponent"]
+            reply = ""
+            for _ in range(2):  # слабая модель ошибается не каждый раз: одна повторная попытка, потом шаблон
+                cand = guards.strip_repeats(guards.strip_player_voice(
+                    llm.opponent_reply(card, state, move, conceded, history, message), players), mine)
+                if cand and _guard_reply(card, state, cand, message):
+                    reply = cand
+                    break
+                log.warning("opponent_reply rejected at position %s: %s", state.position, cand)
             if not reply:
-                log.warning("opponent_reply spoke only the player's words")
-                reply = offline.reply(card, state, move, conceded)
-            elif not _guard_reply(card, state, reply, message):
-                log.warning("opponent_reply named a value past position %s: %s", state.position, reply)
                 reply = offline.reply(card, state, move, conceded)
         except Exception as exc:
             log.warning("opponent_reply fallback: %s", exc)

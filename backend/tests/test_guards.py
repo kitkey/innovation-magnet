@@ -256,3 +256,21 @@ def test_judge_moment_echoing_user_is_dropped():
     assert echoes_user("Вы оставляете отгрузку за 3 дня и рост цены 3%.", users)
     assert echoes_user(users[0], users)
     assert not echoes_user("Готовы подписать на 12 месяцев при росте не выше 2,5%, а при 3% просим отсрочку платежа 30 дней.", users)
+
+
+def test_opponent_reply_guard_stale_value_and_finality():
+    from app import service
+    from app.schemas import OpponentState
+    from app.seeds import SEEDS
+    card = next(c for c in SEEDS.values() if c.opponent_name == "Ольга Кравец")
+    st = OpponentState(position=4.75, trust=0, patience=50, readiness=50, irritation=1)
+    assert service._guard_reply(card, st, "Хорошо, могу опуститься до 4,75%.", "Предлагаю 3%")
+    assert not service._guard_reply(card, st, "Цена всё равно повышается на 6,5%.", "Предлагаю 3%")
+    assert not service._guard_reply(card, st, "4,75% — это наше последнее предложение.", "Предлагаю 3%")
+
+
+def test_strip_repeats():
+    from app.engine import guards
+    prev = ["У нас есть новые расходы, и мы не можем работать в минус. Цена 8,25%."]
+    out = guards.strip_repeats("У нас есть новые расходы, и мы не можем работать в минус. Готова обсудить 6,5%.", prev)
+    assert out == "Готова обсудить 6,5%."

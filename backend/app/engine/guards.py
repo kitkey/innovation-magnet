@@ -312,3 +312,24 @@ def strip_player_voice(reply: str, player_lines: list[str]) -> str:
             continue
         keep.append(s)
     return " ".join(keep).strip().strip("«»\"").strip()
+
+
+FINALITY = re.compile(r"(последн\w* предложени|окончательн|не можем (опуститься |уступить |снизить )?(ниже|больше)|ниже не (можем|опуст)|это наш предел|дальше не (уступ|двига))", re.I)
+
+
+def strip_repeats(reply: str, previous: list[str]) -> str:
+    """Убирает из ответа собеседника предложения, которые почти дословно повторяют его прошлые реплики:
+    слабая модель начинает каждый ответ одной и той же заготовкой."""
+    prev = [_norm(p) for p in previous if p.strip()]
+    keep = []
+    for s in sentences(reply):
+        ns = _norm(s)
+        if len(ns) >= 20 and any(_shared(ns, p) >= 0.7 * len(ns) for p in prev):
+            continue
+        keep.append(s)
+    return " ".join(keep).strip()
+
+
+def claims_finality(reply: str) -> bool:
+    """«Это наше последнее предложение» — позицию двигают правила, собеседник не объявляет предел сам."""
+    return bool(FINALITY.search(reply))
