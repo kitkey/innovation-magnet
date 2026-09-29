@@ -190,7 +190,7 @@ export function OrgCabinet({ user, onUser }: { user: User; onUser: (u: User) => 
           {best.length > 0 && (
             <section className="card">
               <h3>Лучшие за период</h3>
-              <ul className="plain bests">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}</span><b>{n}</b><span className="num">{Math.round(v)}</span></li>)}</ul>
+              <ul className="plain bests">{best.map(([k, n, v]) => <li key={k}><span className="muted">{k}</span><b>{n}</b><span className="num">{num(v)}</span></li>)}</ul>
             </section>
           )}
           <SeasonPanel onChanged={load} />
