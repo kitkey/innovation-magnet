@@ -4,6 +4,8 @@
 
 Проект команды «Магнит инноваций» для задачи №9 ЛЦТ-2026 (ОЭЗ «Алабуга»).
 
+Как запустить и показать продукт без пояснений команды: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+
 ## Как устроено
 
 - Перед диалогом пользователь видит бриф: ситуацию, свою роль, цель, альтернативу и предмет торга. Собеседник открывает разговор первой репликой из карточки сценария; если её нет, реплику пишет LLM, без LLM — шаблон со стартовой позицией собеседника.
@@ -52,9 +54,22 @@ docker compose up --build
 
 Терминал 1, бэкенд (по умолчанию SQLite в `backend/arena.db`):
 
+Windows PowerShell:
+
+```powershell
+cd backend
+python -m venv ..\.venv
+..\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Linux и macOS:
+
 ```bash
 cd backend
-python -m venv ../.venv && ../.venv/Scripts/activate   # Linux/macOS: source ../.venv/bin/activate
+python3 -m venv ../.venv
+source ../.venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
@@ -86,7 +101,7 @@ npm run dev   # http://localhost:5173
   GIGACHAT_CREDENTIALS=<ключ авторизации>
   ```
 
-С живыми ключами эти две конфигурации пока не проверены: прототип на хакатоне работает на модели из `env.example`.
+Демо-сервер команды работает на YandexGPT Lite (`yandexgpt-lite/latest`): на ней говорит собеседник, а разметку ходов, разбор судьи и генерацию карточек при Lite сам берёт YandexGPT Pro (`LLM_LABEL_MODEL`, `LLM_JUDGE_MODEL`, `LLM_CARDGEN_MODEL`; пустое значение = `LLM_MODEL`, при YandexGPT Lite — YandexGPT Pro). Если `LLM_API_KEY` пуст, а `LLM_API_BASE` указывает на Yandex Cloud, для модели берётся `YANDEX_API_KEY`: одному сервисному аккаунту с ролями `ai.languageModels.user`, `ai.speechkit-stt.user` и `ai.speechkit-tts.user` хватает одного ключа. Запасные модели OpenRouter при этом стоит отключить (`LLM_FALLBACKS=`). Конфигурация GigaChat с живым ключом не проверена.
 
 `ADMIN_TOKEN` в `.env` — запасной ключ владельца площадки (поле в форме сценария): с ним можно менять любой сценарий, включая встроенные и зафиксированные. Без токена фиксировать сценарии может только администратор организации.
 
@@ -197,5 +212,7 @@ npx @gltf-transform/cli meshopt b.glb model-small.glb
 ```
 
 ## Документы
+
+Сопроводительная документация (аудитория, архитектура, запуск, демонстрация, ключи): [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md), PDF: [docs/DOCUMENTATION.pdf](docs/DOCUMENTATION.pdf).
 
 ТЗ: [docs/TZ.md](docs/TZ.md).
