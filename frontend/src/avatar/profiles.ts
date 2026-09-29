@@ -14,8 +14,14 @@ const CHIBI: Profile = {
 
 export const CHIBI_AVATARS = ["/avatars/chibi_b1.glb", "/avatars/chibi_b2.glb", "/avatars/chibi_b3.glb", "/avatars/chibi_b4.glb"];
 
+// Pixar-персонажи из того же источника: камера как у MPFB, свет и тон-маппинг как у чиби
+const PIXAR: Profile = { camera: DEFAULT_CAMERA, light: CHIBI.light, neutralTone: true };
+export const PIXAR_AVATARS = ["/avatars/pixar_a1.glb", "/avatars/pixar_a2.glb", "/avatars/pixar_a3.glb", "/avatars/pixar_a4.glb"];
+
 export function profileFor(url: string): Profile {
-  return CHIBI_AVATARS.includes(url) ? CHIBI : { camera: DEFAULT_CAMERA };
+  if (CHIBI_AVATARS.includes(url)) return CHIBI;
+  if (PIXAR_AVATARS.includes(url)) return PIXAR;
+  return { camera: DEFAULT_CAMERA };
 }
 
 // Скепсис: одна бровь вверх, другая вниз с прищуром, уголок рта вниз. Строится на базе neutral.

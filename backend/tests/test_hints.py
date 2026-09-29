@@ -144,7 +144,7 @@ def test_generated_card_drops_hints():
     data = custom_card()
     data |= {"title": data["name"], "target_zone": data["target_zone"] | {"player_wants": "less"}}
     card = to_card(GeneratedCard(**data))
-    assert card.hints == [] and card.coach_tips == [] and card.avatar_url and "chibi" in card.avatar_url
+    assert card.hints == [] and card.coach_tips == [] and card.avatar_url and card.avatar_url.startswith("/avatars/")
     assert card.opponent_name == SUPPLIER.opponent_name
 
 

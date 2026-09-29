@@ -1,4 +1,5 @@
 import itertools
+from pathlib import Path
 import re
 
 from fastapi.testclient import TestClient
@@ -67,6 +68,9 @@ def test_characters_endpoint_and_cardgen_pick():
         items = c.get("/api/avatars/characters").json()
     assert {i["id"] for i in items} == {"b1", "b2", "b3", "b4", "a1", "a2", "a3", "a4"}
     assert all(i["ready"] for i in items if i["style"] == "chibi")
+    for i in items:
+        if i["ready"]:
+            assert (Path(__file__).resolve().parents[2] / "frontend" / "public" / i["url"].lstrip("/")).exists(), i["url"]
     for voice in ("male", "female"):
         url = characters.pick(voice, "Иван Петров")
         assert url and next(ch for ch in characters.CHARACTERS if ch.url == url).voice == voice
