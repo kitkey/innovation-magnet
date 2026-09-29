@@ -251,10 +251,24 @@ def quote_found(quote: str, texts: list[str]) -> bool:
     return False
 
 
+def echoes_user(better: str, user_texts: list[str]) -> bool:
+    """«Как лучше» не должно повторять реплику пользователя: слабая модель часто копирует её целиком или хвостом."""
+    b = _norm(better)
+    if len(b) < 3:
+        return True
+    for t in map(_norm, user_texts):
+        if b in t or SequenceMatcher(None, b, t, autojunk=False).ratio() >= 0.75:
+            return True
+        m = SequenceMatcher(None, b, t, autojunk=False).find_longest_match(0, len(b), 0, len(t))
+        if m.size >= 0.6 * len(b):
+            return True
+    return False
+
+
 def sanitize_judge(card: ScenarioCard, report: JudgeReport, user_texts: list[str], fallback: JudgeReport) -> JudgeReport:
     """Оси строго из метода, выдуманные цитаты выкидываем; если не осталось ни одного момента, берём моменты правил."""
     axes = {a: report.axes.get(a, fallback.axes[a]) for a in rules.METHOD_AXES[card.method]}
-    moments = [m for m in report.key_moments if quote_found(m.quote, user_texts)] or fallback.key_moments
+    moments = [m for m in report.key_moments if quote_found(m.quote, user_texts) and not echoes_user(m.better, user_texts)] or fallback.key_moments
     return JudgeReport(axes=axes, key_moments=moments[:3], next_scenario_hint=report.next_scenario_hint or fallback.next_scenario_hint)
 
 

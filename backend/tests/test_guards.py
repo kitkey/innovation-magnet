@@ -248,3 +248,11 @@ def test_strip_speaker_trailing_own_name():
     assert llm.strip_speaker(card, "Цена уже озвучена, Ольга Кравец.") == "Цена уже озвучена."
     assert llm.strip_speaker(card, "Ольга Кравец: Добрый день.") == "Добрый день."
     assert llm.strip_speaker(card, "Меня зовут Ольга Кравец, я отвечаю за продажи.") == "Меня зовут Ольга Кравец, я отвечаю за продажи."
+
+
+def test_judge_moment_echoing_user_is_dropped():
+    from app.service import echoes_user
+    users = ["Если мы закрепим объём 40 тысяч ящиков в месяц на 12 месяцев, вы оставляете отгрузку за 3 дня и рост цены 3%."]
+    assert echoes_user("Вы оставляете отгрузку за 3 дня и рост цены 3%.", users)
+    assert echoes_user(users[0], users)
+    assert not echoes_user("Готовы подписать на 12 месяцев при росте не выше 2,5%, а при 3% просим отсрочку платежа 30 дней.", users)
